@@ -57,6 +57,16 @@ const formatD = (str) => {
   return str;
 };
 
+// Formatiert Von-Bis Daten
+const formatRange = (start, end, fallback) => {
+  const s = formatD(start);
+  const e = formatD(end);
+  if (s && e) return `${s} - ${e}`;
+  if (s) return s;
+  if (e) return e;
+  return fallback;
+};
+
 
 // ==========================================
 // 🛠️ FALLBACK-DATEN (Wenn DB leer/offline)
@@ -135,8 +145,13 @@ export default function App() {
   const [isSaving, setIsSaving] = useState(false);
   const [adminFlightDate, setAdminFlightDate] = useState("");
   const [adminFlightCsv, setAdminFlightCsv] = useState(null);
-  const [adminAccDate1, setAdminAccDate1] = useState("");
-  const [adminAccDate2, setAdminAccDate2] = useState("");
+  
+  // Neu: Start- und Enddatum pro Zeitraum für Admin
+  const [adminAccDate1Start, setAdminAccDate1Start] = useState("");
+  const [adminAccDate1End, setAdminAccDate1End] = useState("");
+  const [adminAccDate2Start, setAdminAccDate2Start] = useState("");
+  const [adminAccDate2End, setAdminAccDate2End] = useState("");
+  
   const [adminAccCurrCsv, setAdminAccCurrCsv] = useState(null);
   const [adminAccPrevCsv, setAdminAccPrevCsv] = useState(null);
   
@@ -166,15 +181,22 @@ export default function App() {
   
   const [accData, setAccData] = useState([]);
   const [accFilterType, setAccFilterType] = useState('All');
+  const [availableAccCountries, setAvailableAccCountries] = useState([]);
+  const [activeAccCountries, setActiveAccCountries] = useState([]);
 
   // --- TEMP USER DIY MODAL STATES ---
   const [isDiyModalOpen, setIsDiyModalOpen] = useState(false);
   const [tempFlightFile, setTempFlightFile] = useState(null);
   const [tempFlightDate, setTempFlightDate] = useState("");
+  
+  // Neu: Start- und Enddatum pro Zeitraum für DIY User
+  const [tempAccDate1Start, setTempAccDate1Start] = useState("");
+  const [tempAccDate1End, setTempAccDate1End] = useState("");
+  const [tempAccDate2Start, setTempAccDate2Start] = useState("");
+  const [tempAccDate2End, setTempAccDate2End] = useState("");
+  
   const [tempAccCurrent, setTempAccCurrent] = useState(null);
   const [tempAccPrevious, setTempAccPrevious] = useState(null);
-  const [tempAccDate1, setTempAccDate1] = useState("");
-  const [tempAccDate2, setTempAccDate2] = useState("");
 
   const chartRef = useRef(null);
   const chartInstance = useRef(null);
@@ -317,6 +339,13 @@ export default function App() {
     return joined;
   };
 
+  // Extrahiert verfügbare Länder, sobald sich die Unterkunfts-Daten ändern
+  useEffect(() => {
+    const countries = [...new Set(accData.map(d => d.userCountry))].sort();
+    setAvailableAccCountries(countries);
+    setActiveAccCountries(countries);
+  }, [accData]);
+
   // Wenn Global-Daten aktualisiert werden, neu laden
   useEffect(() => {
     if (isDefaultDataFlights && flightsGlobalCsv) {
@@ -370,8 +399,9 @@ export default function App() {
     try {
       const textCurr = await adminAccCurrCsv.text();
       const textPrev = await adminAccPrevCsv.text();
-      const l1 = formatD(adminAccDate1) || "Aktuell";
-      const l2 = formatD(adminAccDate2) || "Vorher";
+      
+      const l1 = formatRange(adminAccDate1Start, adminAccDate1End, "Aktuell");
+      const l2 = formatRange(adminAccDate2Start, adminAccDate2End, "Vorher");
 
       await setDoc(getSafeDocRef(db, appId, 'appConfig', 'accommodations'), {
         currentCsv: textCurr,
@@ -410,9 +440,11 @@ export default function App() {
     const currRaw = parseAccCSV(textCurr);
     const prevRaw = parseAccCSV(textPrev);
     setAccData(mergeAccData(currRaw, prevRaw));
-    const l1 = formatD(tempAccDate1) || "Aktuell";
-    const l2 = formatD(tempAccDate2) || "Vorher";
+    
+    const l1 = formatRange(tempAccDate1Start, tempAccDate1End, "Aktuell");
+    const l2 = formatRange(tempAccDate2Start, tempAccDate2End, "Vorher");
     setCustomAccDate(`${l1} vs ${l2}`);
+    
     setIsDefaultDataAcc(false);
     setIsDiyModalOpen(false);
   };
@@ -513,7 +545,10 @@ export default function App() {
 
     } else if (activeTab === 'accommodations' && accData.length > 0) {
       // 🛏️ ACCOMMODATIONS
-      const filteredData = accData.filter(r => accFilterType === 'All' || r.type === accFilterType);
+      const filteredData = accData.filter(r => 
+        (accFilterType === 'All' || r.type === accFilterType) &&
+        activeAccCountries.includes(r.userCountry)
+      );
       
       let minAd = Infinity, maxAd = -Infinity;
       filteredData.forEach(row => { if (row.adOpp < minAd) minAd = row.adOpp; if (row.adOpp > maxAd) maxAd = row.adOpp; });
@@ -590,11 +625,12 @@ export default function App() {
     const handleResize = () => chartInstance.current?.resize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [data, timeframe, trendType, echartsReady, disabledRoutes, activeCountries, activeDestCountries, minAdOppFilter, activeTab, accData, accFilterType]);
+  }, [data, timeframe, trendType, echartsReady, disabledRoutes, activeCountries, activeDestCountries, minAdOppFilter, activeTab, accData, accFilterType, activeAccCountries]);
 
   const toggleDisabledRoute = (routeId) => setDisabledRoutes(prev => prev.filter(id => id !== routeId));
   const toggleCountry = (country) => setActiveCountries(prev => prev.includes(country) ? prev.filter(c => c !== country) : [...prev, country]);
   const toggleDestCountry = (country) => setActiveDestCountries(prev => prev.includes(country) ? prev.filter(c => c !== country) : [...prev, country]);
+  const toggleAccCountry = (country) => setActiveAccCountries(prev => prev.includes(country) ? prev.filter(c => c !== country) : [...prev, country]);
   const setContinentAll = (countriesInContinent) => setActiveDestCountries(prev => { const newSet = new Set(prev); countriesInContinent.forEach(c => newSet.add(c)); return Array.from(newSet); });
   const setContinentNone = (countriesInContinent) => setActiveDestCountries(prev => prev.filter(c => !countriesInContinent.includes(c)));
 
@@ -753,18 +789,43 @@ export default function App() {
           {/* FILTER BEREICH (UNTERKÜNFTE) */}
           {activeTab === 'accommodations' && accData.length > 0 && (
             <>
+              {availableAccCountries.length > 0 && (
+                <div className="mb-6">
+                  <div className="flex justify-between items-end mb-2">
+                    <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2"><Filter className="w-4 h-4" /> Ursprungsland</h2>
+                    <div className="flex gap-2">
+                      <button onClick={() => setActiveAccCountries([...availableAccCountries])} className="text-[10px] text-indigo-400 hover:text-indigo-300 transition-colors">Alle</button>
+                      <span className="text-[10px] text-slate-500">|</span>
+                      <button onClick={() => setActiveAccCountries([])} className="text-[10px] text-slate-400 hover:text-slate-300 transition-colors">Keines</button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-5 gap-1.5">
+                    {availableAccCountries.map(country => (
+                      <button key={country} onClick={() => toggleAccCountry(country)} title={COUNTRY_NAMES[country] || country} className={`w-full flex justify-center items-center py-1.5 rounded transition-colors border ${activeAccCountries.includes(country) ? 'bg-indigo-600/20 border-indigo-500 opacity-100' : 'bg-slate-800 border-slate-700 hover:bg-slate-700 opacity-50 grayscale'}`}>
+                        <img src={`https://flagcdn.com/w40/${country.toLowerCase()}.png`} alt={country} className="w-6 rounded-sm shadow-sm" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="mb-6">
-                <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2"><Filter className="w-4 h-4" /> Reisetyp</h2>
-                <div className="flex bg-slate-900 rounded-md p-1 border border-slate-700">
-                  {['All', 'Domestic', 'International'].map(type => (
-                    <button key={type} onClick={() => setAccFilterType(type)} className={`flex-1 py-1.5 text-xs font-medium rounded transition-colors ${accFilterType === type ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>
-                      {type === 'All' ? 'Alle' : type === 'Domestic' ? 'Inland' : 'Ausland'}
-                    </button>
-                  ))}
+                <div className="flex justify-between items-end mb-2">
+                  <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2"><Filter className="w-4 h-4" /> Reisetyp</h2>
+                  <div className="flex gap-2">
+                    <button onClick={() => setAccFilterType('All')} className={`text-[10px] transition-colors ${accFilterType === 'All' ? 'text-indigo-400 font-bold' : 'text-slate-400 hover:text-slate-300'}`}>Alle</button>
+                    <span className="text-[10px] text-slate-500">|</span>
+                    <button onClick={() => setAccFilterType('Domestic')} className={`text-[10px] transition-colors ${accFilterType === 'Domestic' ? 'text-indigo-400 font-bold' : 'text-slate-400 hover:text-slate-300'}`}>Domestic</button>
+                    <span className="text-[10px] text-slate-500">|</span>
+                    <button onClick={() => setAccFilterType('International')} className={`text-[10px] transition-colors ${accFilterType === 'International' ? 'text-indigo-400 font-bold' : 'text-slate-400 hover:text-slate-300'}`}>International</button>
+                  </div>
                 </div>
               </div>
+              
               <div className="text-center p-3 bg-emerald-900/20 border border-emerald-800/50 rounded-lg mb-6">
-                <p className="text-sm text-emerald-400 font-semibold">{accData.length} Routen berechnet</p>
+                <p className="text-sm text-emerald-400 font-semibold">
+                  {accData.filter(r => (accFilterType === 'All' || r.type === accFilterType) && activeAccCountries.includes(r.userCountry)).length} Routen berechnet
+                </p>
                 <p className="text-xs text-slate-400 mt-1">Gehe mit der Maus über die pulsierenden Regionen, um Details zu sehen.</p>
               </div>
             </>
@@ -883,8 +944,11 @@ export default function App() {
                       
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-xs font-semibold text-slate-400 mb-1">Datum Aktuell (Current)</label>
-                          <input type="date" value={adminAccDate1} onChange={(e) => setAdminAccDate1(e.target.value)} className="w-full bg-slate-900 border border-slate-600 text-slate-200 text-sm rounded px-3 py-2 mb-3" />
+                          <label className="block text-xs font-semibold text-slate-400 mb-1">Zeitraum Aktuell (Current)</label>
+                          <div className="flex gap-2 mb-3">
+                             <input type="date" value={adminAccDate1Start} onChange={(e) => setAdminAccDate1Start(e.target.value)} className="w-full bg-slate-900 border border-slate-600 text-slate-200 text-xs rounded px-2 py-2" title="Von" />
+                             <input type="date" value={adminAccDate1End} onChange={(e) => setAdminAccDate1End(e.target.value)} className="w-full bg-slate-900 border border-slate-600 text-slate-200 text-xs rounded px-2 py-2" title="Bis" />
+                          </div>
                           <label className={`flex flex-col items-center justify-center w-full p-3 border-2 border-dashed rounded cursor-pointer transition-colors ${adminAccCurrCsv ? 'border-emerald-500 bg-emerald-500/10' : 'border-indigo-500/50 hover:border-indigo-400 hover:bg-slate-700'}`}>
                             {adminAccCurrCsv ? (
                               <div className="flex flex-col items-center gap-1 text-emerald-400 text-center">
@@ -894,15 +958,18 @@ export default function App() {
                             ) : (
                               <div className="flex flex-col items-center gap-1 text-slate-300">
                                 <Upload className="w-4 h-4 text-indigo-400" />
-                                <span className="text-[10px] font-medium">Datei wählen</span>
+                                <span className="text-[10px] font-medium">CSV Datei wählen</span>
                               </div>
                             )}
                             <input type="file" accept=".csv" className="hidden" onChange={(e) => setAdminAccCurrCsv(e.target.files[0])} />
                           </label>
                         </div>
                         <div>
-                          <label className="block text-xs font-semibold text-slate-400 mb-1">Datum Vorher (Previous)</label>
-                          <input type="date" value={adminAccDate2} onChange={(e) => setAdminAccDate2(e.target.value)} className="w-full bg-slate-900 border border-slate-600 text-slate-200 text-sm rounded px-3 py-2 mb-3" />
+                          <label className="block text-xs font-semibold text-slate-400 mb-1">Zeitraum Vorher (Previous)</label>
+                          <div className="flex gap-2 mb-3">
+                             <input type="date" value={adminAccDate2Start} onChange={(e) => setAdminAccDate2Start(e.target.value)} className="w-full bg-slate-900 border border-slate-600 text-slate-200 text-xs rounded px-2 py-2" title="Von" />
+                             <input type="date" value={adminAccDate2End} onChange={(e) => setAdminAccDate2End(e.target.value)} className="w-full bg-slate-900 border border-slate-600 text-slate-200 text-xs rounded px-2 py-2" title="Bis" />
+                          </div>
                           <label className={`flex flex-col items-center justify-center w-full p-3 border-2 border-dashed rounded cursor-pointer transition-colors ${adminAccPrevCsv ? 'border-emerald-500 bg-emerald-500/10' : 'border-indigo-500/50 hover:border-indigo-400 hover:bg-slate-700'}`}>
                             {adminAccPrevCsv ? (
                               <div className="flex flex-col items-center gap-1 text-emerald-400 text-center">
@@ -912,7 +979,7 @@ export default function App() {
                             ) : (
                               <div className="flex flex-col items-center gap-1 text-slate-300">
                                 <Upload className="w-4 h-4 text-indigo-400" />
-                                <span className="text-[10px] font-medium">Datei wählen</span>
+                                <span className="text-[10px] font-medium">CSV Datei wählen</span>
                               </div>
                             )}
                             <input type="file" accept=".csv" className="hidden" onChange={(e) => setAdminAccPrevCsv(e.target.files[0])} />
@@ -977,9 +1044,11 @@ export default function App() {
                 <div className="space-y-5">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
-                      <label className="block text-sm font-semibold text-slate-300 mb-2">Datum Aktuell (Current)</label>
-                      <input type="date" value={tempAccDate1} onChange={(e) => setTempAccDate1(e.target.value)} className="w-full bg-slate-900 border border-slate-600 text-slate-200 text-sm rounded px-3 py-2 mb-3" />
-                      <label className="block text-sm font-semibold text-slate-300 mb-2">CSV Aktuelle Woche</label>
+                      <label className="block text-sm font-semibold text-slate-300 mb-1">Zeitraum Aktuell (Current)</label>
+                      <div className="flex gap-2 mb-3">
+                         <input type="date" value={tempAccDate1Start} onChange={(e) => setTempAccDate1Start(e.target.value)} className="w-full bg-slate-900 border border-slate-600 text-slate-200 text-xs rounded px-2 py-2" title="Von" />
+                         <input type="date" value={tempAccDate1End} onChange={(e) => setTempAccDate1End(e.target.value)} className="w-full bg-slate-900 border border-slate-600 text-slate-200 text-xs rounded px-2 py-2" title="Bis" />
+                      </div>
                       <label className={`flex flex-col items-center justify-center w-full p-3 border-2 border-dashed rounded cursor-pointer transition-colors ${tempAccCurrent ? 'border-emerald-500 bg-emerald-500/10' : 'border-orange-500/50 hover:border-orange-400 hover:bg-slate-700'}`}>
                         {tempAccCurrent ? (
                           <div className="flex flex-col items-center gap-1 text-emerald-400 text-center">
@@ -989,16 +1058,18 @@ export default function App() {
                         ) : (
                           <div className="flex flex-col items-center gap-1 text-slate-300">
                             <Upload className="w-4 h-4 text-orange-400" />
-                            <span className="text-[10px] font-medium">Datei wählen</span>
+                            <span className="text-[10px] font-medium">CSV Datei wählen</span>
                           </div>
                         )}
                         <input type="file" accept=".csv" className="hidden" onChange={(e) => setTempAccCurrent(e.target.files[0])} />
                       </label>
                     </div>
                     <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
-                      <label className="block text-sm font-semibold text-slate-300 mb-2">Datum Vorher (Previous)</label>
-                      <input type="date" value={tempAccDate2} onChange={(e) => setTempAccDate2(e.target.value)} className="w-full bg-slate-900 border border-slate-600 text-slate-200 text-sm rounded px-3 py-2 mb-3" />
-                      <label className="block text-sm font-semibold text-slate-300 mb-2">CSV Vorwoche</label>
+                      <label className="block text-sm font-semibold text-slate-300 mb-1">Zeitraum Vorher (Previous)</label>
+                      <div className="flex gap-2 mb-3">
+                         <input type="date" value={tempAccDate2Start} onChange={(e) => setTempAccDate2Start(e.target.value)} className="w-full bg-slate-900 border border-slate-600 text-slate-200 text-xs rounded px-2 py-2" title="Von" />
+                         <input type="date" value={tempAccDate2End} onChange={(e) => setTempAccDate2End(e.target.value)} className="w-full bg-slate-900 border border-slate-600 text-slate-200 text-xs rounded px-2 py-2" title="Bis" />
+                      </div>
                       <label className={`flex flex-col items-center justify-center w-full p-3 border-2 border-dashed rounded cursor-pointer transition-colors ${tempAccPrevious ? 'border-emerald-500 bg-emerald-500/10' : 'border-orange-500/50 hover:border-orange-400 hover:bg-slate-700'}`}>
                         {tempAccPrevious ? (
                           <div className="flex flex-col items-center gap-1 text-emerald-400 text-center">
@@ -1008,7 +1079,7 @@ export default function App() {
                         ) : (
                           <div className="flex flex-col items-center gap-1 text-slate-300">
                             <Upload className="w-4 h-4 text-orange-400" />
-                            <span className="text-[10px] font-medium">Datei wählen</span>
+                            <span className="text-[10px] font-medium">CSV Datei wählen</span>
                           </div>
                         )}
                         <input type="file" accept=".csv" className="hidden" onChange={(e) => setTempAccPrevious(e.target.files[0])} />
