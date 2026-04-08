@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Upload, Map as MapIcon, Calendar, TrendingUp, Info, XCircle, EyeOff, Filter, SlidersHorizontal, ChevronDown, ChevronUp, Bed, CheckCircle, User, RefreshCw, Lock, Save, Database, X, CloudUpload } from 'lucide-react';
+import { Upload, Map as MapIcon, Calendar, TrendingUp, XCircle, EyeOff, Filter, SlidersHorizontal, ChevronDown, ChevronUp, Bed, CheckCircle, RefreshCw, Lock, Database, X, CloudUpload } from 'lucide-react';
 
 // === FIREBASE IMPORTS ===
 import { initializeApp } from 'firebase/app';
@@ -14,14 +14,10 @@ let isFirebaseReady = false;
 
 try {
   let config;
-  // Umgebung 1: Ausführung im Canvas (Hier greifen automatische Tokens)
-  if (typeof __firebase_config !== 'undefined') {
-    config = JSON.parse(__firebase_config);
-    // WICHTIG: Original-ID behalten, damit die Security Rules ("Permissions") übereinstimmen
-    appId = typeof __app_id !== 'undefined' ? __app_id : 'tac-travel-trends';
-  } 
-  // Umgebung 2: Dein Vercel/StackBlitz (Hier greifen deine .env Variablen)
-  else {
+  if (typeof window !== 'undefined' && typeof window.__firebase_config !== 'undefined') {
+    config = JSON.parse(window.__firebase_config);
+    appId = typeof window.__app_id !== 'undefined' ? window.__app_id : 'tac-travel-trends';
+  } else {
     config = {
       apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
       authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -33,7 +29,6 @@ try {
     appId = 'tac-travel-trends';
   }
 
-  // Nur initialisieren, wenn eine Config (z.B. API Key) vorhanden ist
   if (config && config.apiKey) {
     app = initializeApp(config);
     auth = getAuth(app);
@@ -44,18 +39,22 @@ try {
   console.warn("Firebase Init übersprungen. Fallback-Daten werden genutzt.", error);
 }
 
-// --- DYNAMISCHER PFAD-BALANCER (Behebt den "Invalid document reference" Bug) ---
-// Wenn "appId" einen Slash enthält, verschieben sich die Firebase-Segmente (ungerade Anzahl -> Fehler).
-// Diese Funktion balanciert die Segmente automatisch aus.
+// --- DYNAMISCHER PFAD-BALANCER ---
 const getSafeDocRef = (firestoreDb, targetAppId, collectionName, documentId) => {
   const fullPath = `artifacts/${targetAppId}/public/data/${collectionName}/${documentId}`;
   const segmentsCount = fullPath.split('/').filter(Boolean).length;
   if (segmentsCount % 2 !== 0) {
-    // Ungerade Anzahl -> Firebase hält es für eine Collection. Wir hängen "/_doc" an, um es zu einem Document zu machen.
     return doc(firestoreDb, `${fullPath}/_doc`);
   }
-  // Gerade Anzahl -> Sauberer Document-Pfad
   return doc(firestoreDb, fullPath);
+};
+
+// --- HILFSFUNKTION FÜR KALENDER-DATUM ---
+const formatD = (str) => {
+  if(!str) return "";
+  const parts = str.split('-'); // ISO Date format: YYYY-MM-DD
+  if(parts.length === 3) return `${parts[2]}.${parts[1]}.${parts[0]}`;
+  return str;
 };
 
 
@@ -134,9 +133,10 @@ export default function App() {
   // --- ADMIN PANEL STATES ---
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [adminFlightDate, setAdminFlightDate] = useState("Heute");
+  const [adminFlightDate, setAdminFlightDate] = useState("");
   const [adminFlightCsv, setAdminFlightCsv] = useState(null);
-  const [adminAccDate, setAdminAccDate] = useState("KW Aktuell vs Vorwoche");
+  const [adminAccDate1, setAdminAccDate1] = useState("");
+  const [adminAccDate2, setAdminAccDate2] = useState("");
   const [adminAccCurrCsv, setAdminAccCurrCsv] = useState(null);
   const [adminAccPrevCsv, setAdminAccPrevCsv] = useState(null);
   
@@ -164,8 +164,6 @@ export default function App() {
   const [isDefaultDataAcc, setIsDefaultDataAcc] = useState(true);
   const [customAccDate, setCustomAccDate] = useState("");
   
-  const [accCurrentRaw, setAccCurrentRaw] = useState([]);
-  const [accPreviousRaw, setAccPreviousRaw] = useState([]);
   const [accData, setAccData] = useState([]);
   const [accFilterType, setAccFilterType] = useState('All');
 
@@ -176,7 +174,7 @@ export default function App() {
   const [tempAccCurrent, setTempAccCurrent] = useState(null);
   const [tempAccPrevious, setTempAccPrevious] = useState(null);
   const [tempAccDate1, setTempAccDate1] = useState("");
-
+  const [tempAccDate2, setTempAccDate2] = useState("");
 
   const chartRef = useRef(null);
   const chartInstance = useRef(null);
@@ -185,15 +183,6 @@ export default function App() {
   // 1. INIT & AUTH (FIREBASE + ECHARTS)
   // ==========================================
   useEffect(() => {
-    // Geheimen Shortcut für Admin-Panel lauschen (Alt+Shift+D)
-    const handleKeyDown = (e) => {
-      if (e.shiftKey && e.altKey && e.key.toLowerCase() === 'd') {
-        e.preventDefault();
-        setIsAdminPanelOpen(prev => !prev);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-
     // ECharts laden
     if (!document.getElementById('echarts-core')) {
       const script = document.createElement('script');
@@ -215,8 +204,8 @@ export default function App() {
     if (isFirebaseReady) {
       const initAuth = async () => {
         try {
-          if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-            await signInWithCustomToken(auth, __initial_auth_token);
+          if (typeof window !== 'undefined' && typeof window.__initial_auth_token !== 'undefined' && window.__initial_auth_token) {
+            await signInWithCustomToken(auth, window.__initial_auth_token);
           } else {
             await signInAnonymously(auth);
           }
@@ -226,7 +215,6 @@ export default function App() {
 
       const unsubscribe = onAuthStateChanged(auth, (u) => setUser(u));
       return () => {
-        window.removeEventListener('keydown', handleKeyDown);
         unsubscribe();
       };
     } else {
@@ -237,8 +225,6 @@ export default function App() {
       setAccGlobalPrevCsv(DEFAULT_ACC_PREVIOUS_CSV);
       setAccGlobalDate("Demo Daten (Offline)");
     }
-    
-    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   // ==========================================
@@ -247,7 +233,6 @@ export default function App() {
   useEffect(() => {
     if (!user || !isFirebaseReady || !appId) return;
 
-    // Lausche auf FLIGHTS Datenbank (Mit dem dynamischen Pfad-Balancer)
     const flightsRef = getSafeDocRef(db, appId, 'appConfig', 'flights');
     const unsubFlights = onSnapshot(flightsRef, (docSnap) => {
       if (docSnap.exists()) {
@@ -260,7 +245,6 @@ export default function App() {
       }
     }, (err) => console.error("Snapshot Error Flights:", err));
 
-    // Lausche auf ACCOMMODATIONS Datenbank
     const accRef = getSafeDocRef(db, appId, 'appConfig', 'accommodations');
     const unsubAcc = onSnapshot(accRef, (docSnap) => {
       if (docSnap.exists()) {
@@ -333,7 +317,7 @@ export default function App() {
     return joined;
   };
 
-  // Wenn Global-Daten aktualisiert werden, neu laden (sofern nicht DIY aktiv ist)
+  // Wenn Global-Daten aktualisiert werden, neu laden
   useEffect(() => {
     if (isDefaultDataFlights && flightsGlobalCsv) {
       const parsed = parseCSV(flightsGlobalCsv);
@@ -341,12 +325,10 @@ export default function App() {
       setDisabledRoutes([]);
       const countries = [...new Set(parsed.map(d => d.originCountry))].sort();
       setAvailableCountries(countries);
-      const initialActive = countries.filter(c => ['DE', 'AT', 'CH', 'US', 'GB'].includes(c));
-      setActiveCountries(initialActive.length > 0 ? initialActive : countries);
+      setActiveCountries(countries); // Alle auswählen
       const destCountries = [...new Set(parsed.map(d => d.destCountry))].sort();
       setAvailableDestCountries(destCountries);
-      const initialDestActive = destCountries.filter(c => ['DE', 'AT', 'CH', 'US', 'GB'].includes(c));
-      setActiveDestCountries(initialDestActive.length > 0 ? initialDestActive : destCountries);
+      setActiveDestCountries(destCountries); // Alle auswählen
     }
   }, [flightsGlobalCsv, isDefaultDataFlights]);
 
@@ -373,7 +355,7 @@ export default function App() {
       const text = await adminFlightCsv.text();
       await setDoc(getSafeDocRef(db, appId, 'appConfig', 'flights'), {
         csv: text,
-        lastUpdated: adminFlightDate
+        lastUpdated: formatD(adminFlightDate) || "Heute"
       });
       setIsAdminPanelOpen(false);
       setAdminFlightCsv(null);
@@ -388,10 +370,13 @@ export default function App() {
     try {
       const textCurr = await adminAccCurrCsv.text();
       const textPrev = await adminAccPrevCsv.text();
+      const l1 = formatD(adminAccDate1) || "Aktuell";
+      const l2 = formatD(adminAccDate2) || "Vorher";
+
       await setDoc(getSafeDocRef(db, appId, 'appConfig', 'accommodations'), {
         currentCsv: textCurr,
         prevCsv: textPrev,
-        lastUpdated: adminAccDate
+        lastUpdated: `${l1} vs ${l2}`
       });
       setIsAdminPanelOpen(false);
       setAdminAccCurrCsv(null);
@@ -405,7 +390,7 @@ export default function App() {
     if(!tempFlightFile) return;
     const text = await tempFlightFile.text();
     setIsDefaultDataFlights(false);
-    setCustomFlightDate(tempFlightDate || "Manuelles Datum");
+    setCustomFlightDate(formatD(tempFlightDate) || "Manuelles Datum");
     const parsed = parseCSV(text);
     setData(parsed);
     // UI Update Filter...
@@ -425,7 +410,9 @@ export default function App() {
     const currRaw = parseAccCSV(textCurr);
     const prevRaw = parseAccCSV(textPrev);
     setAccData(mergeAccData(currRaw, prevRaw));
-    setCustomAccDate(tempAccDate1 || "Manueller Zeitraum");
+    const l1 = formatD(tempAccDate1) || "Aktuell";
+    const l2 = formatD(tempAccDate2) || "Vorher";
+    setCustomAccDate(`${l1} vs ${l2}`);
     setIsDefaultDataAcc(false);
     setIsDiyModalOpen(false);
   };
@@ -512,7 +499,7 @@ export default function App() {
               const trendPercent = (d.currentTrend * 100).toFixed(1);
               const sign = d.currentTrend > 0 ? '+' : '';
               const googleFlightsUrl = `https://www.google.com/travel/flights?q=Flights%20from%20${encodeURIComponent(d.originCity)}%20to%20${encodeURIComponent(d.destCity)}`;
-              return `<div style="font-weight:600; margin-bottom: 8px; font-size: 14px; display: flex; align-items: center;">${getFlagImgHtml(d.originCountry)}<span style="vertical-align:middle;">${d.originCity}</span><span style="margin: 0 6px;">➔</span>${getFlagImgHtml(d.destCountry)}<span style="vertical-align:middle;">${d.destCity}</span></div><div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span style="color:#94a3b8; margin-right: 12px;">Suchvolumen (Ad Opp.):</span><span style="font-weight:bold">${d.currentAdOpp.toLocaleString('de-DE')}</span></div><div style="display:flex; justify-content:space-between; margin-bottom: 8px;"><span style="color:#94a3b8; margin-right: 12px;">Trend (${d.trendLabel}):</span><span style="font-weight:bold; color:${getTrendColor(d.currentTrend)}">${sign}${trendPercent}%</span></div><div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid #334155; text-align: center;"><a href="${googleFlightsUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background: #2563eb; color: #ffffff; text-decoration: none; padding: 6px 12px; border-radius: 4px; font-size: 11px; font-weight: 500;">✈️ Aktuelle Preise prüfen</a></div>`;
+              return `<div style="font-weight:600; margin-bottom: 8px; font-size: 14px; display: flex; align-items: center;">${getFlagImgHtml(d.originCountry)}<span style="vertical-align:middle;">${d.originCity}</span><span style="margin: 0 6px;">➔</span>${getFlagImgHtml(d.destCountry)}<span style="vertical-align:middle;">${d.destCity}</span></div><div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span style="color:#94a3b8; margin-right: 12px;">Interesse:</span><span style="font-weight:bold">${d.currentAdOpp.toLocaleString('de-DE')}</span></div><div style="display:flex; justify-content:space-between; margin-bottom: 8px;"><span style="color:#94a3b8; margin-right: 12px;">Trend (${d.trendLabel}):</span><span style="font-weight:bold; color:${getTrendColor(d.currentTrend)}">${sign}${trendPercent}%</span></div><div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid #334155; text-align: center;"><a href="${googleFlightsUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background: #2563eb; color: #ffffff; text-decoration: none; padding: 6px 12px; border-radius: 4px; font-size: 11px; font-weight: 500;">✈️ Aktuelle Preise prüfen</a></div>`;
             }
             return params.name;
           }
@@ -567,13 +554,13 @@ export default function App() {
               const d = params.data;
               const trendPercent = (d.trend * 100).toFixed(1);
               const sign = d.trend > 0 ? '+' : '';
-              return `<div style="font-weight:600; margin-bottom: 8px; font-size: 14px; border-bottom: 1px solid #334155; padding-bottom: 8px;">📍 Region: <span style="color: #818cf8;">${d.name}</span> (${getFlagImgHtml(d.country)}${COUNTRY_NAMES[d.country] || d.country})</div><div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span style="color:#94a3b8; margin-right: 12px;">Suchvolumen (Gesamt):</span><span style="font-weight:bold">${d.adOpp.toLocaleString('de-DE')}</span></div><div style="display:flex; justify-content:space-between; margin-bottom: 4px;"><span style="color:#94a3b8; margin-right: 12px;">Regionaler Trend:</span><span style="font-weight:bold; color:${getTrendColor(d.trend)}">${sign}${trendPercent}%</span></div>`;
+              return `<div style="font-weight:600; margin-bottom: 8px; font-size: 14px; border-bottom: 1px solid #334155; padding-bottom: 8px;">📍 Region: <span style="color: #818cf8;">${d.name}</span> (${getFlagImgHtml(d.country)}${COUNTRY_NAMES[d.country] || d.country})</div><div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span style="color:#94a3b8; margin-right: 12px;">Interesse (Gesamt):</span><span style="font-weight:bold">${d.adOpp.toLocaleString('de-DE')}</span></div><div style="display:flex; justify-content:space-between; margin-bottom: 4px;"><span style="color:#94a3b8; margin-right: 12px;">Regionaler Trend:</span><span style="font-weight:bold; color:${getTrendColor(d.trend)}">${sign}${trendPercent}%</span></div>`;
             }
             if (params.seriesType === 'lines') {
               const d = params.data.details;
               const trendPercent = (d.trend * 100).toFixed(1);
               const sign = d.trend > 0 ? '+' : '';
-              return `<div style="font-weight:600; margin-bottom: 8px; font-size: 12px; display: flex; align-items: center;">${getFlagImgHtml(d.userCountry)}<span style="vertical-align:middle;">${COUNTRY_NAMES[d.userCountry] || d.userCountry}</span><span style="margin: 0 6px;">➔</span>${getFlagImgHtml(d.destCountry)}<span style="vertical-align:middle;">${d.destRegion}</span></div><div style="display:flex; justify-content:space-between; margin-bottom:4px; font-size: 11px;"><span style="color:#94a3b8; margin-right: 12px;">Ad Opp.:</span><span style="font-weight:bold">${d.adOpp.toLocaleString('de-DE')}</span></div><div style="display:flex; justify-content:space-between; font-size: 11px;"><span style="color:#94a3b8; margin-right: 12px;">Trend:</span><span style="font-weight:bold; color:${getTrendColor(d.trend)}">${sign}${trendPercent}%</span></div>`;
+              return `<div style="font-weight:600; margin-bottom: 8px; font-size: 12px; display: flex; align-items: center;">${getFlagImgHtml(d.userCountry)}<span style="vertical-align:middle;">${COUNTRY_NAMES[d.userCountry] || d.userCountry}</span><span style="margin: 0 6px;">➔</span>${getFlagImgHtml(d.destCountry)}<span style="vertical-align:middle;">${d.destRegion}</span></div><div style="display:flex; justify-content:space-between; margin-bottom:4px; font-size: 11px;"><span style="color:#94a3b8; margin-right: 12px;">Interesse:</span><span style="font-weight:bold">${d.adOpp.toLocaleString('de-DE')}</span></div><div style="display:flex; justify-content:space-between; font-size: 11px;"><span style="color:#94a3b8; margin-right: 12px;">Trend:</span><span style="font-weight:bold; color:${getTrendColor(d.trend)}">${sign}${trendPercent}%</span></div>`;
             }
             return params.name;
           }
@@ -618,7 +605,12 @@ export default function App() {
       <div className="w-80 bg-slate-800 border-r border-slate-700 flex flex-col z-10 shadow-xl">
         <div className="p-6 flex-1 overflow-y-auto custom-scrollbar">
           
-          <div className="flex items-center gap-3 mb-4">
+          {/* LOGO: NEUER GEHEIMER ADMIN-ZUGANG (Doppelklick) */}
+          <div 
+            className="flex items-center gap-3 mb-4 cursor-pointer select-none" 
+            onDoubleClick={() => setIsAdminPanelOpen(true)}
+            title=" "
+          >
             <MapIcon className="text-blue-400 w-8 h-8 shrink-0" />
             <h1 className="text-xl font-bold text-white leading-tight">TAC<br/><span className="text-sm font-normal text-slate-400">Travel Trends</span></h1>
           </div>
@@ -638,14 +630,13 @@ export default function App() {
                   }
                 </p>
               </div>
-              {/* Reset Button falls Custom Data aktiv */}
               {((activeTab === 'flights' && !isDefaultDataFlights) || (activeTab === 'accommodations' && !isDefaultDataAcc)) && (
                 <button onClick={activeTab === 'flights' ? initDefaultFlights : initDefaultAcc} className="bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white p-1.5 rounded transition-colors" title="Zurück zu Standard-Daten">
                   <RefreshCw className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
-            {!isFirebaseReady && <p className="text-[9px] text-red-400 mt-2 pl-2">Datenbank (Firebase) offline/nicht konfiguriert.</p>}
+            {!isFirebaseReady && <p className="text-[9px] text-red-400 mt-2 pl-2">Datenbank (Firebase) offline/nicht konfiguriert. Prüfe Vercel Env Vars.</p>}
           </div>
 
           {/* TAB-STEUERUNG */}
@@ -717,7 +708,7 @@ export default function App() {
               )}
 
               <div className="mb-6 p-4 bg-slate-800/80 rounded-lg border border-slate-700 shadow-inner">
-                <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2"><SlidersHorizontal className="w-4 h-4" /> Min. Ad Opp.</h2>
+                <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2"><SlidersHorizontal className="w-4 h-4" /> Min. Interesse</h2>
                 <div className="flex items-center gap-2 mb-3">
                   <input type="number" min="0" value={minAdOppFilter} onChange={(e) => setMinAdOppFilter(e.target.value === '' ? '' : parseInt(e.target.value, 10).toString())} className="w-full bg-slate-900 border border-slate-600 text-slate-200 text-sm rounded px-3 py-1.5 focus:outline-none focus:border-blue-500 transition-colors" placeholder="Exakter Wert..." />
                 </div>
@@ -737,7 +728,7 @@ export default function App() {
               </div>
 
               <div className="mb-6">
-                <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2"><TrendingUp className="w-4 h-4" /> Trend-Basis (Farbe)</h2>
+                <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2"><TrendingUp className="w-4 h-4" /> Vergleichszeitraum</h2>
                 <div className="flex flex-col gap-2">
                   <button onClick={() => setTrendType('yoy')} className={`px-4 py-2 text-left rounded-md text-sm font-medium transition-colors ${trendType === 'yoy' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700'}`}>Vorjahr (YoY)</button>
                   <button onClick={() => setTrendType('mom_wow')} disabled={timeframe === '84d'} className={`px-4 py-2 text-left rounded-md text-sm font-medium transition-colors ${timeframe === '84d' ? 'opacity-50 cursor-not-allowed bg-slate-800/50 text-slate-500 border-slate-800' : trendType === 'mom_wow' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700'}`}>Vorperiode (MoM / WoW)</button>
@@ -794,7 +785,7 @@ export default function App() {
               <div className="flex justify-between text-[10px] text-slate-400 mt-1"><span>Negativ</span><span>Neutral</span><span>Positiv</span></div>
             </div>
             <div>
-              <p className="text-xs text-slate-300 mb-2">Ad Opp. (Dicke)</p>
+              <p className="text-xs text-slate-300 mb-2">Interesse (Dicke)</p>
               <div className="flex items-center gap-2">
                 <div className="h-[1.5px] w-8 bg-slate-400 rounded-full"></div>
                 <span className="text-[10px] text-slate-400 flex-1 text-center">bis</span>
@@ -833,13 +824,12 @@ export default function App() {
 
 
       {/* ========================================== */}
-      {/* 🚀 ADMIN PANEL (Geheim: Strg+Shift+A)        */}
+      {/* 🚀 ADMIN PANEL (Geheim: Doppelklick aufs Logo) */}
       {/* ========================================== */}
       {isAdminPanelOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 backdrop-blur-sm p-4">
           <div className="bg-slate-900 border-2 border-red-500/50 rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
             
-            {/* Header */}
             <div className="flex justify-between items-center p-5 border-b border-red-900/50 bg-red-950/20">
               <div className="flex items-center gap-3">
                 <Lock className="text-red-500 w-6 h-6" />
@@ -848,9 +838,7 @@ export default function App() {
               <button onClick={() => setIsAdminPanelOpen(false)} className="text-slate-400 hover:text-white transition-colors"><X className="w-6 h-6" /></button>
             </div>
 
-            {/* Body */}
             <div className="p-6 overflow-y-auto custom-scrollbar space-y-8">
-              
               {!isFirebaseReady ? (
                 <div className="p-4 bg-red-900/20 border border-red-500/30 rounded text-red-200 text-sm">
                   <strong>⚠️ Firebase ist nicht konfiguriert.</strong> Du musst erst deine Umgebungsvariablen in Vercel hinterlegen, bevor du Daten live speichern kannst.
@@ -863,7 +851,7 @@ export default function App() {
                     <div className="space-y-4">
                       <div>
                         <label className="block text-xs font-semibold text-slate-400 mb-1">Neuer Stichtag</label>
-                        <input type="text" value={adminFlightDate} onChange={(e) => setAdminFlightDate(e.target.value)} className="w-full bg-slate-900 border border-slate-600 text-slate-200 text-sm rounded px-3 py-2" />
+                        <input type="date" value={adminFlightDate} onChange={(e) => setAdminFlightDate(e.target.value)} className="w-full bg-slate-900 border border-slate-600 text-slate-200 text-sm rounded px-3 py-2" />
                       </div>
                       <div>
                         <label className="block text-xs font-semibold text-slate-400 mb-2">Neue CSV Datei</label>
@@ -892,13 +880,11 @@ export default function App() {
                   <div className="bg-slate-800 p-5 rounded-lg border border-slate-700">
                     <h3 className="text-lg font-bold text-indigo-400 flex items-center gap-2 mb-4"><Bed className="w-5 h-5"/> Unterkünfte (Datenbank)</h3>
                     <div className="space-y-4">
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-400 mb-1">Neuer Zeitraum</label>
-                        <input type="text" value={adminAccDate} onChange={(e) => setAdminAccDate(e.target.value)} className="w-full bg-slate-900 border border-slate-600 text-slate-200 text-sm rounded px-3 py-2" />
-                      </div>
+                      
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-xs font-semibold text-slate-400 mb-2">CSV Current</label>
+                          <label className="block text-xs font-semibold text-slate-400 mb-1">Datum Aktuell (Current)</label>
+                          <input type="date" value={adminAccDate1} onChange={(e) => setAdminAccDate1(e.target.value)} className="w-full bg-slate-900 border border-slate-600 text-slate-200 text-sm rounded px-3 py-2 mb-3" />
                           <label className={`flex flex-col items-center justify-center w-full p-3 border-2 border-dashed rounded cursor-pointer transition-colors ${adminAccCurrCsv ? 'border-emerald-500 bg-emerald-500/10' : 'border-indigo-500/50 hover:border-indigo-400 hover:bg-slate-700'}`}>
                             {adminAccCurrCsv ? (
                               <div className="flex flex-col items-center gap-1 text-emerald-400 text-center">
@@ -915,7 +901,8 @@ export default function App() {
                           </label>
                         </div>
                         <div>
-                          <label className="block text-xs font-semibold text-slate-400 mb-2">CSV Previous</label>
+                          <label className="block text-xs font-semibold text-slate-400 mb-1">Datum Vorher (Previous)</label>
+                          <input type="date" value={adminAccDate2} onChange={(e) => setAdminAccDate2(e.target.value)} className="w-full bg-slate-900 border border-slate-600 text-slate-200 text-sm rounded px-3 py-2 mb-3" />
                           <label className={`flex flex-col items-center justify-center w-full p-3 border-2 border-dashed rounded cursor-pointer transition-colors ${adminAccPrevCsv ? 'border-emerald-500 bg-emerald-500/10' : 'border-indigo-500/50 hover:border-indigo-400 hover:bg-slate-700'}`}>
                             {adminAccPrevCsv ? (
                               <div className="flex flex-col items-center gap-1 text-emerald-400 text-center">
@@ -959,12 +946,13 @@ export default function App() {
               <button onClick={() => setIsDiyModalOpen(false)} className="text-slate-400 hover:text-white transition-colors"><X className="w-6 h-6" /></button>
             </div>
             <div className="p-6 overflow-y-auto custom-scrollbar">
-              <p className="text-sm text-slate-400 mb-6">Hier kannst du temporär eigene CSV-Exporte hochladen und auswerten. Die eingegebenen Datumsangaben dienen lediglich der Beschriftung im Dashboard.</p>
+              <p className="text-sm text-slate-400 mb-6">Hier kannst du temporär eigene CSV-Exporte hochladen und auswerten. Die ausgewählten Kalenderdaten dienen lediglich der Beschriftung im Dashboard.</p>
+              
               {activeTab === 'flights' ? (
                 <div className="space-y-5">
                   <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
-                    <label className="block text-sm font-semibold text-slate-300 mb-2">1. Stichtag benennen</label>
-                    <input type="text" placeholder="z. B. 24. Oktober 2023" value={tempFlightDate} onChange={(e) => setTempFlightDate(e.target.value)} className="w-full bg-slate-900 border border-slate-600 text-slate-200 text-sm rounded px-3 py-2" />
+                    <label className="block text-sm font-semibold text-slate-300 mb-2">1. Stichtag auswählen</label>
+                    <input type="date" value={tempFlightDate} onChange={(e) => setTempFlightDate(e.target.value)} className="w-full bg-slate-900 border border-slate-600 text-slate-200 text-sm rounded px-3 py-2" />
                   </div>
                   <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
                     <label className="block text-sm font-semibold text-slate-300 mb-2">2. CSV-Datei hochladen</label>
@@ -987,13 +975,11 @@ export default function App() {
                 </div>
               ) : (
                 <div className="space-y-5">
-                  <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
-                    <label className="block text-sm font-semibold text-slate-300 mb-2">1. Zeitraum benennen (Label)</label>
-                    <input type="text" placeholder="z. B. KW 42 vs KW 41" value={tempAccDate1} onChange={(e) => setTempAccDate1(e.target.value)} className="w-full bg-slate-900 border border-slate-600 text-slate-200 text-sm rounded px-3 py-2 mb-3" />
-                  </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
-                      <label className="block text-sm font-semibold text-slate-300 mb-2">2. CSV Aktuelle Woche</label>
+                      <label className="block text-sm font-semibold text-slate-300 mb-2">Datum Aktuell (Current)</label>
+                      <input type="date" value={tempAccDate1} onChange={(e) => setTempAccDate1(e.target.value)} className="w-full bg-slate-900 border border-slate-600 text-slate-200 text-sm rounded px-3 py-2 mb-3" />
+                      <label className="block text-sm font-semibold text-slate-300 mb-2">CSV Aktuelle Woche</label>
                       <label className={`flex flex-col items-center justify-center w-full p-3 border-2 border-dashed rounded cursor-pointer transition-colors ${tempAccCurrent ? 'border-emerald-500 bg-emerald-500/10' : 'border-orange-500/50 hover:border-orange-400 hover:bg-slate-700'}`}>
                         {tempAccCurrent ? (
                           <div className="flex flex-col items-center gap-1 text-emerald-400 text-center">
@@ -1010,7 +996,9 @@ export default function App() {
                       </label>
                     </div>
                     <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
-                      <label className="block text-sm font-semibold text-slate-300 mb-2">3. CSV Vorwoche</label>
+                      <label className="block text-sm font-semibold text-slate-300 mb-2">Datum Vorher (Previous)</label>
+                      <input type="date" value={tempAccDate2} onChange={(e) => setTempAccDate2(e.target.value)} className="w-full bg-slate-900 border border-slate-600 text-slate-200 text-sm rounded px-3 py-2 mb-3" />
+                      <label className="block text-sm font-semibold text-slate-300 mb-2">CSV Vorwoche</label>
                       <label className={`flex flex-col items-center justify-center w-full p-3 border-2 border-dashed rounded cursor-pointer transition-colors ${tempAccPrevious ? 'border-emerald-500 bg-emerald-500/10' : 'border-orange-500/50 hover:border-orange-400 hover:bg-slate-700'}`}>
                         {tempAccPrevious ? (
                           <div className="flex flex-col items-center gap-1 text-emerald-400 text-center">
@@ -1042,6 +1030,7 @@ export default function App() {
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #475569; }
         input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
         input[type="number"] { -moz-appearance: textfield; }
+        input[type="date"]::-webkit-calendar-picker-indicator { cursor: pointer; filter: invert(0.8); }
       `}} />
     </div>
   );
