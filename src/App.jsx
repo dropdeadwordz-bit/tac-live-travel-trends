@@ -408,10 +408,9 @@ export default function App() {
       const destCountry = destFull.includes('-') ? destFull.split('-')[0].trim() : 'Unbekannt';
       const destCity = destFull.includes('-') ? destFull.split('-')[1].trim() : destFull;
       
-      // AUTO-FILTER: Nur EU + US/CA als Ursprung & nur EU als Ziel zulassen
+      // AUTO-FILTER für Flüge: Nur EU + US/CA als Ursprung zulassen. Ziele weltweit!
       const isOriginValid = ['US', 'CA'].includes(originCountry) || COUNTRY_TO_CONTINENT[originCountry] === 'Europa';
-      const isDestValid = COUNTRY_TO_CONTINENT[destCountry] === 'Europa';
-      if (!isOriginValid || !isDestValid) continue;
+      if (!isOriginValid) continue;
 
       const oCoord = CITY_COORDS[originCity] || COUNTRY_CENTER_COORDS[originCountry] || getFallbackCoord(originCity);
       const dCoord = CITY_COORDS[destCity] || COUNTRY_CENTER_COORDS[destCountry] || getFallbackCoord(destCity);
@@ -442,7 +441,7 @@ export default function App() {
            const destCountry = cols[1].trim();
            const destRegion = cols[2].trim();
            
-           // AUTO-FILTER: Nur EU + US/CA als Ursprung & nur EU als Ziel zulassen
+           // AUTO-FILTER für Unterkünfte: Ursprung EU + US/CA & Ziel nur EU
            const isOriginValid = ['US', 'CA'].includes(userCountry) || COUNTRY_TO_CONTINENT[userCountry] === 'Europa';
            const isDestValid = COUNTRY_TO_CONTINENT[destCountry] === 'Europa';
            if (!isOriginValid || !isDestValid) continue;
@@ -1146,7 +1145,7 @@ export default function App() {
               title="Pro Workspace (DIY Analytics)"
             />
           </div>
-          <span className="text-[10px] text-slate-600">v1.8</span>
+          <span className="text-[10px] text-slate-600">v1.9</span>
         </div>
       </div>
 
