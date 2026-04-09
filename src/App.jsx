@@ -39,13 +39,10 @@ try {
   console.warn("Firebase Init übersprungen. Fallback-Daten werden genutzt.", error);
 }
 
-// --- DYNAMISCHER PFAD-BALANCER ---
 const getSafeDocRef = (firestoreDb, targetAppId, collectionName, documentId) => {
   const fullPath = `artifacts/${targetAppId}/public/data/${collectionName}/${documentId}`;
   const segmentsCount = fullPath.split('/').filter(Boolean).length;
-  if (segmentsCount % 2 !== 0) {
-    return doc(firestoreDb, `${fullPath}/_doc`);
-  }
+  if (segmentsCount % 2 !== 0) return doc(firestoreDb, `${fullPath}/_doc`);
   return doc(firestoreDb, fullPath);
 };
 
@@ -66,7 +63,7 @@ const formatRange = (start, end, fallback) => {
   return fallback;
 };
 
-// Berechnet automatisch "Letzte Woche Mo-So" und "Vorletzte Woche Mo-So"
+// Berechnet "Letzte Woche Mo-So" und davor
 const getPreviousWeekDates = (weeksAgo) => {
   const d = new Date();
   const day = d.getDay() === 0 ? 7 : d.getDay(); 
@@ -81,14 +78,44 @@ const getPreviousWeekDates = (weeksAgo) => {
   };
 };
 
+// Berechnet exakte 30-Tage Perioden
+const get30DayDates = () => {
+  const d = new Date();
+  const day = d.getDay() === 0 ? 7 : d.getDay(); 
+  d.setDate(d.getDate() - day); 
+  const end1 = new Date(d);
+  const start1 = new Date(d);
+  start1.setDate(start1.getDate() - 29);
+  
+  const end2 = new Date(start1);
+  end2.setDate(end2.getDate() - 1);
+  const start2 = new Date(end2);
+  start2.setDate(start2.getDate() - 29);
+  
+  return {
+    cStart: start1.toISOString().split('T')[0],
+    cEnd: end1.toISOString().split('T')[0],
+    pStart: start2.toISOString().split('T')[0],
+    pEnd: end2.toISOString().split('T')[0]
+  };
+};
+
 const lastWeekDates = getPreviousWeekDates(1);
 const twoWeeksAgoDates = getPreviousWeekDates(2);
+const dates30 = get30DayDates();
 
-// Fallback-Algorithmus für völlig unbekannte Länder
-const getFallbackCoord = (str) => {
-  if(!str) return [0,0];
+// Fallback-Algorithmus - Zentriert Punkte sicher eng um das Land, ohne Grenz-Überschreitungen!
+const getFallbackCoord = (str, baseCoord) => {
+  if(!str) return baseCoord || [0,0];
   let hash = 0;
   for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  
+  if (baseCoord) {
+    // ±0.2 Grad (ca. 20km) Streuung, damit sie nicht exakt übereinander liegen, aber im Land bleiben!
+    const offsetLon = ((Math.abs(hash) % 100) / 250) - 0.2; 
+    const offsetLat = (((Math.abs(hash) >> 5) % 100) / 250) - 0.2;
+    return [baseCoord[0] + offsetLon, baseCoord[1] + offsetLat];
+  }
   const lon = -40 + (Math.abs(hash) % 20); 
   const lat = 10 + ((Math.abs(hash) >> 5) % 30);
   return [lon, lat];
@@ -101,31 +128,21 @@ const DEFAULT_FLIGHTS_CSV = `Route,,,Last 84 Days,,Last 28 Days,,,Last 7 Days,,
 Origin,Destination,Route ID,Ad Opp.,YoY,Ad Opp.,MoM,YoY,Ad Opp.,WoW,YoY
 GB - London,ES - Barcelona,LON-BCN,700000,0.263,200000,-0.397,0.094,30000,-0.239,-0.419
 US - New York,GB - London,NYC-LON,500000,-0.008,200000,0.597,0.33,40000,-0.053,-0.126
-DE - Frankfurt,ES - Palma de Mallorca,FRA-PMI,200000,-0.128,60000,-0.047,-0.165,20000,0.031,-0.133
-AT - Vienna,ES - Barcelona,VIE-BCN,80000,-0.115,20000,-0.052,-0.132,6000,-0.057,-0.172
-CH - Zürich,ES - Barcelona,ZRH-BCN,70000,0.06,30000,0.174,0.099,7000,-0.018,0.13`;
+DE - Frankfurt,ES - Palma de Mallorca,FRA-PMI,200000,-0.128,60000,-0.047,-0.165,20000,0.031,-0.133`;
 
 const DEFAULT_ACC_CURRENT_CSV = `User Country,Destination Country,Destination Region,Domestic / Int'l,Ad Opp.
 GB,GB,England,Domestic,7000000
 US,ES,Andalusia,International,5000000
-US,FR,Île-de-France,International,2000000
-DE,DE,Bavaria,Domestic,1000000
-GB,GB,Scotland,Domestic,1000000
-ES,ES,Valencian Community,Domestic,1000000
-IT,CH,Tessin,International,500000`;
+DE,DE,Bavaria,Domestic,1000000`;
 
 const DEFAULT_ACC_PREVIOUS_CSV = `User Country,Destination Country,Destination Region,Domestic / Int'l,Ad Opp.
 GB,GB,England,Domestic,6800000
 US,ES,Andalusia,International,4800000
-US,FR,Île-de-France,International,1900000
-DE,DE,Bavaria,Domestic,900000
-GB,GB,Scotland,Domestic,1050000
-ES,ES,Valencian Community,Domestic,800000
-IT,CH,Tessin,International,400000`;
+DE,DE,Bavaria,Domestic,900000`;
 
 
 // ==========================================
-// 🔧 WÖRTERBÜCHER (MASSIV ERWEITERT)
+// 🔧 WÖRTERBÜCHER
 // ==========================================
 const getFlagImgHtml = (countryCode) => {
   if (!countryCode || countryCode.length !== 2) return '';
@@ -136,7 +153,6 @@ const COUNTRY_NAMES = { "DE": "Deutschland", "AT": "Österreich", "CH": "Schweiz
 const COUNTRY_TO_CONTINENT = { "DE": "Europa", "AT": "Europa", "CH": "Europa", "GB": "Europa", "FR": "Europa", "ES": "Europa", "IT": "Europa", "NL": "Europa", "CZ": "Europa", "BE": "Europa", "HU": "Europa", "BG": "Europa", "IE": "Europa", "GR": "Europa", "CY": "Europa", "MT": "Europa", "HR": "Europa", "IS": "Europa", "NO": "Europa", "SE": "Europa", "DK": "Europa", "FI": "Europa", "PL": "Europa", "RO": "Europa", "PT": "Europa", "UA": "Europa", "LU": "Europa", "SK": "Europa", "EE": "Europa", "LV": "Europa", "LT": "Europa", "RS": "Europa", "BA": "Europa", "AL": "Europa", "MD": "Europa", "MK": "Europa", "US": "Nord- & Mittelamerika", "CA": "Nord- & Mittelamerika", "MX": "Nord- & Mittelamerika", "PR": "Nord- & Mittelamerika", "BB": "Nord- & Mittelamerika", "BR": "Südamerika", "AR": "Südamerika", "CO": "Südamerika", "CL": "Südamerika", "TH": "Asien", "SG": "Asien", "IN": "Asien", "JP": "Asien", "CN": "Asien", "RU": "Asien", "ID": "Asien", "VN": "Asien", "MY": "Asien", "PH": "Asien", "KR": "Asien", "TR": "Naher Osten", "AE": "Naher Osten", "IL": "Naher Osten", "QA": "Naher Osten", "SA": "Naher Osten", "EG": "Afrika", "ZA": "Afrika", "MA": "Afrika", "AU": "Ozeanien", "NZ": "Ozeanien" };
 
 const CITY_COORDS = { 
-  // Ursprüngliche Städte
   "Frankfurt": [8.6821, 50.1109], "Berlin": [13.4050, 52.5200], "Munich": [11.5820, 48.1351], 
   "Vienna": [16.3738, 48.2082], "Zürich": [8.5417, 47.3769], "Barcelona": [2.1734, 41.3851], 
   "London": [-0.1278, 51.5074], "Paris": [2.3522, 48.8566], "Amsterdam": [4.9041, 52.3676], 
@@ -144,77 +160,66 @@ const CITY_COORDS = {
   "San Juan": [-66.1057, 18.4655], "Prague": [14.4378, 50.0755], "İstanbul": [28.9784, 41.0082], 
   "Bridgetown": [-59.6167, 13.0968], "Brussels": [4.3517, 50.8503], "Milan": [9.1900, 45.4642], 
   "Budapest": [19.0402, 47.4979], "Bilbao": [-2.9350, 43.2630], "Tel Aviv-Yafo": [34.8000, 32.0833], 
-  "Bangkok": [100.5018, 13.7563],
-  // NEU: Massives Update für Europa & US/Welt Hubs
-  "Palma de Mallorca": [2.6502, 39.5696], "Madrid": [-3.7038, 40.4168], "Lisbon": [-9.1393, 38.7223],
-  "Rome": [12.4964, 41.9028], "Dublin": [-6.2603, 53.3498], "Athens": [23.7275, 37.9838],
-  "Copenhagen": [12.5683, 55.6761], "Oslo": [10.7522, 59.9139], "Stockholm": [18.0686, 59.3293],
-  "Helsinki": [24.9384, 60.1695], "Warsaw": [21.0122, 52.2297], "Reykjavik": [-21.8277, 64.1283],
-  "Geneva": [6.1432, 46.2044], "Hamburg": [9.9937, 53.5511], "Düsseldorf": [6.7735, 51.2277],
-  "Stuttgart": [9.1829, 48.7758], "Cologne": [6.9528, 50.9364], "Miami": [-80.1918, 25.7617],
-  "Los Angeles": [-118.2437, 34.0522], "San Francisco": [-122.4194, 37.7749], "Chicago": [-87.6298, 41.8781],
-  "Boston": [-71.0589, 42.3601], "Las Vegas": [-115.1398, 36.1699], "Orlando": [-81.3792, 28.5383],
-  "Seattle": [-122.3321, 47.6062], "Atlanta": [-84.3880, 33.7490], "Toronto": [-79.3832, 43.6532],
-  "Montreal": [-73.5673, 45.5017], "Vancouver": [-123.1207, 49.2827], "Cancun": [-86.8515, 21.1619],
-  "Cancún": [-86.8515, 21.1619], "Tenerife": [-16.2518, 28.2916], "Gran Canaria": [-15.5474, 27.9202],
-  "Ibiza": [1.4330, 38.9067], "Faro": [-7.9304, 37.0194], "Madeira": [-16.9081, 32.6496],
-  "Antalya": [30.7133, 36.8969], "Málaga": [-4.4203, 36.7213], "Malaga": [-4.4203, 36.7213],
-  "Alicante": [-0.4815, 38.3452], "Valencia": [-0.3763, 39.4699], "Naples": [14.2681, 40.8518],
-  "Venice": [12.3155, 45.4408], "Porto": [-8.6291, 41.1579], "Edinburgh": [-3.1883, 55.9533],
-  "Manchester": [-2.2426, 53.4808], "Birmingham": [-1.8904, 52.4862], "Glasgow": [-4.2518, 55.8642],
-  "Belfast": [-5.9301, 54.5973], "Catania": [15.0873, 37.5079], "Palermo": [13.3613, 38.1157],
-  "Bucharest": [26.1025, 44.4268], "Sofia": [23.3219, 42.6977], "Belgrade": [20.4489, 44.8125],
-  "Zagreb": [15.9819, 45.8150], "Split": [16.4402, 43.5081], "Dubrovnik": [18.0944, 42.6507],
-  "Krakow": [19.9450, 50.0647], "Kraków": [19.9450, 50.0647], "Riga": [24.1052, 56.9496],
-  "Tallinn": [24.7536, 59.4370], "Vilnius": [25.2797, 54.6872], "Larnaca": [33.6292, 34.9153],
-  "Paphos": [32.4245, 34.7720], "Valletta": [14.5146, 35.8989], "Luqa": [14.4898, 35.8590],
-  "Rhodes": [28.2225, 36.4341], "Heraklion": [25.1320, 35.3288], "Corfu": [19.9197, 39.6243],
-  "Thessaloniki": [22.9444, 40.6401], "Pristina": [21.1655, 42.6629], "Tirana": [19.8189, 41.3275],
-  "Sarajevo": [18.4131, 43.8563], "Ljubljana": [14.5058, 46.0569], "Bratislava": [17.1077, 48.1486],
-  "Nice": [7.2620, 43.7102], "Lyon": [4.8357, 45.7640], "Marseille": [5.3698, 43.2965],
-  "Toulouse": [1.4442, 43.6047], "Bordeaux": [-0.5792, 44.8378], "Nantes": [-1.5536, 47.2184],
-  "Strasbourg": [7.7521, 48.5734], "Lille": [3.0573, 50.6292], "Bologna": [11.3426, 44.4949],
-  "Florence": [11.2558, 43.7696], "Genoa": [8.9463, 44.4056], "Turin": [7.6869, 45.0703],
-  "Pisa": [11.2558, 43.7167], "Verona": [12.3155, 45.4384], "Seville": [-5.9845, 37.3891],
-  "Zaragoza": [-0.8810, 41.6488], "Reykjavík": [-21.8277, 64.1283], "Girona": [1.2546, 41.9794],
-  "Menorca": [4.0204, 39.9496], "Lanzarote": [-15.5474, 27.9202], "Fuerteventura": [-14.0116, 28.3587],
-  "Ibiza City": [1.4330, 38.9067], "Chania": [25.0203, 35.5138], "Kefalonia": [19.9197, 39.6243],
-  "Santorini": [28.2225, 36.4341], "Mykonos": [25.3289, 36.4408], "Zakynthos": [20.8833, 37.7833],
-  "Bodrum": [27.4296, 37.0344], "Dalaman": [30.7133, 36.7648], "Izmir": [27.1428, 38.4237],
-  "Ankara": [32.8597, 39.9334], "Bremen": [8.8017, 53.0793], "Hanover": [9.7320, 52.3705],
-  "Leipzig": [12.3731, 51.3397], "Dresden": [13.7373, 51.0504], "Nuremberg": [11.0767, 49.4521],
-  "Graz": [15.4395, 47.0707], "Salzburg": [15.4395, 47.8095], "Innsbruck": [13.0440, 47.2692],
-  "Basel": [8.5417, 47.5596], "Bern": [7.5886, 47.5596], "Lugano": [8.9511, 46.0037],
-  "Gothenburg": [11.9746, 57.7089], "Malmö": [11.9746, 55.6049], "Bergen": [5.3221, 60.3913],
-  "Stavanger": [5.3221, 58.9699], "Tromsø": [18.9553, 69.6492], "Aarhus": [10.2039, 56.1567],
-  "Aalborg": [10.2039, 57.0488], "Billund": [9.9187, 55.7316], "Turku": [22.2666, 60.4518],
-  "Tampere": [23.7600, 61.4978], "Oulu": [9.9187, 65.0121], "Rovaniemi": [25.4682, 65.5000],
-  "Skopje": [21.4280, 42.0050], "Podgorica": [19.2636, 42.4411], "Chisinau": [28.8303, 47.0105], 
-  "Cluj-Napoca": [23.5900, 46.7712], "Timisoara": [23.5900, 45.7489], "Iasi": [27.5689, 47.1585], 
-  "Varna": [27.9147, 43.2141], "Burgas": [27.9147, 42.5048], "Plovdiv": [27.4626, 42.1354], 
-  "Ohrid": [20.8016, 41.1130]
+  "Bangkok": [100.5018, 13.7563], "Palma de Mallorca": [2.6502, 39.5696], "Madrid": [-3.7038, 40.4168], 
+  "Lisbon": [-9.1393, 38.7223], "Rome": [12.4964, 41.9028], "Dublin": [-6.2603, 53.3498], 
+  "Athens": [23.7275, 37.9838], "Copenhagen": [12.5683, 55.6761], "Oslo": [10.7522, 59.9139], 
+  "Stockholm": [18.0686, 59.3293], "Helsinki": [24.9384, 60.1695], "Warsaw": [21.0122, 52.2297], 
+  "Reykjavik": [-21.8277, 64.1283], "Geneva": [6.1432, 46.2044], "Hamburg": [9.9937, 53.5511], 
+  "Düsseldorf": [6.7735, 51.2277], "Stuttgart": [9.1829, 48.7758], "Cologne": [6.9528, 50.9364], 
+  "Miami": [-80.1918, 25.7617], "Los Angeles": [-118.2437, 34.0522], "San Francisco": [-122.4194, 37.7749], 
+  "Chicago": [-87.6298, 41.8781], "Boston": [-71.0589, 42.3601], "Las Vegas": [-115.1398, 36.1699], 
+  "Orlando": [-81.3792, 28.5383], "Seattle": [-122.3321, 47.6062], "Atlanta": [-84.3880, 33.7490], 
+  "Toronto": [-79.3832, 43.6532], "Montreal": [-73.5673, 45.5017], "Vancouver": [-123.1207, 49.2827], 
+  "Cancun": [-86.8515, 21.1619], "Cancún": [-86.8515, 21.1619], "Tenerife": [-16.2518, 28.2916], 
+  "Gran Canaria": [-15.5474, 27.9202], "Ibiza": [1.4330, 38.9067], "Faro": [-7.9304, 37.0194], 
+  "Madeira": [-16.9081, 32.6496], "Antalya": [30.7133, 36.8969], "Málaga": [-4.4203, 36.7213], 
+  "Malaga": [-4.4203, 36.7213], "Alicante": [-0.4815, 38.3452], "Valencia": [-0.3763, 39.4699], 
+  "Naples": [14.2681, 40.8518], "Venice": [12.3155, 45.4408], "Porto": [-8.6291, 41.1579], 
+  "Edinburgh": [-3.1883, 55.9533], "Manchester": [-2.2426, 53.4808], "Birmingham": [-1.8904, 52.4862], 
+  "Glasgow": [-4.2518, 55.8642], "Belfast": [-5.9301, 54.5973], "Catania": [15.0873, 37.5079], 
+  "Palermo": [13.3613, 38.1157], "Bucharest": [26.1025, 44.4268], "Sofia": [23.3219, 42.6977], 
+  "Belgrade": [20.4489, 44.8125], "Zagreb": [15.9819, 45.8150], "Split": [16.4402, 43.5081], 
+  "Krakow": [19.9450, 50.0647], "Riga": [24.1052, 56.9496], "Tallinn": [24.7536, 59.4370], 
+  "Vilnius": [25.2797, 54.6872], "Larnaca": [33.6292, 34.9153], "Paphos": [32.4245, 34.7720], 
+  "Valletta": [14.5146, 35.8989], "Rhodes": [28.2225, 36.4341], "Heraklion": [25.1320, 35.3288], 
+  "Corfu": [19.9197, 39.6243], "Thessaloniki": [22.9444, 40.6401], "Pristina": [21.1655, 42.6629], 
+  "Tirana": [19.8189, 41.3275], "Sarajevo": [18.4131, 43.8563], "Ljubljana": [14.5058, 46.0569], 
+  "Bratislava": [17.1077, 48.1486], "Nice": [7.2620, 43.7102], "Lyon": [4.8357, 45.7640], 
+  "Marseille": [5.3698, 43.2965], "Toulouse": [1.4442, 43.6047], "Bordeaux": [-0.5792, 44.8378], 
+  "Nantes": [-1.5536, 47.2184], "Strasbourg": [7.7521, 48.5734], "Lille": [3.0573, 50.6292], 
+  "Bologna": [11.3426, 44.4949], "Florence": [11.2558, 43.7696], "Genoa": [8.9463, 44.4056], 
+  "Turin": [7.6869, 45.0703], "Pisa": [11.2558, 43.7167], "Verona": [12.3155, 45.4384], 
+  "Seville": [-5.9845, 37.3891], "Zaragoza": [-0.8810, 41.6488], "Reykjavík": [-21.8277, 64.1283], 
+  "Girona": [1.2546, 41.9794], "Menorca": [4.0204, 39.9496], "Lanzarote": [-15.5474, 27.9202], 
+  "Fuerteventura": [-14.0116, 28.3587], "Chania": [25.0203, 35.5138], "Kefalonia": [19.9197, 39.6243], 
+  "Santorini": [28.2225, 36.4341], "Mykonos": [25.3289, 36.4408], "Zakynthos": [20.8833, 37.7833], 
+  "Bodrum": [27.4296, 37.0344], "Dalaman": [30.7133, 36.7648], "Izmir": [27.1428, 38.4237], 
+  "Ankara": [32.8597, 39.9334], "Hanover": [9.7320, 52.3705], "Leipzig": [12.3731, 51.3397], 
+  "Dresden": [13.7373, 51.0504], "Nuremberg": [11.0767, 49.4521], "Graz": [15.4395, 47.0707], 
+  "Innsbruck": [13.0440, 47.2692], "Basel": [8.5417, 47.5596], "Bern": [7.5886, 47.5596], 
+  "Lugano": [8.9511, 46.0037], "Gothenburg": [11.9746, 57.7089], "Malmö": [11.9746, 55.6049], 
+  "Bergen": [5.3221, 60.3913], "Stavanger": [5.3221, 58.9699], "Tromsø": [18.9553, 69.6492], 
+  "Aarhus": [10.2039, 56.1567], "Aalborg": [10.2039, 57.0488], "Billund": [9.9187, 55.7316], 
+  "Turku": [22.2666, 60.4518], "Tampere": [23.7600, 61.4978], "Oulu": [9.9187, 65.0121], 
+  "Rovaniemi": [25.4682, 65.5000], "Skopje": [21.4280, 42.0050], "Podgorica": [19.2636, 42.4411], 
+  "Chisinau": [28.8303, 47.0105], "Cluj-Napoca": [23.5900, 46.7712], "Timisoara": [23.5900, 45.7489], 
+  "Iasi": [27.5689, 47.1585], "Varna": [27.9147, 43.2141], "Burgas": [27.9147, 42.5048], 
+  "Plovdiv": [27.4626, 42.1354], "Ohrid": [20.8016, 41.1130],
+  // Neu aufgenommen für Geodaten-Reparatur
+  "Salzburg": [13.0550, 47.8095], "Vorarlberg": [9.9065, 47.2304], "Dubrovnik": [18.0944, 42.6507], "Liberec": [15.0562, 50.7671]
 };
 
 const COUNTRY_CENTER_COORDS = { "US": [-95.71, 37.09], "GB": [-3.43, 55.37], "IN": [78.96, 20.59], "BR": [-51.92, -14.23], "JP": [138.25, 36.20], "CA": [-106.34, 56.13], "FR": [2.21, 46.22], "ES": [-3.74, 40.46], "DE": [10.45, 51.16], "IT": [12.56, 41.87], "CH": [8.22, 46.81], "AT": [14.55, 47.51], "NL": [5.29, 52.13], "AE": [53.84, 23.68], "HR": [15.20, 45.10], "PT": [-8.22, 39.39], "BG": [25.48, 42.73], "UA": [31.16, 48.37], "ID": [113.92, -0.78], "EG": [30.80, 26.82], "BE": [4.4699, 50.5039], "CZ": [15.4730, 49.8175], "SK": [19.6990, 48.6690], "PL": [19.1451, 51.9194], "HU": [19.5033, 47.1625], "LU": [6.1296, 49.8153], "SE": [18.0686, 59.3293], "NO": [10.7522, 59.9139], "DK": [9.5018, 56.2639], "FI": [25.7482, 61.9241], "IE": [-8.2439, 53.4129], "GR": [21.8243, 39.0742], "RO": [24.9668, 45.9432], "TR": [35.2433, 38.9637], "ZA": [22.9375, -30.5595], "AU": [133.7751, -25.2744], "NZ": [174.8860, -40.9006], "AR": [-63.6167, -38.4161], "CL": [-71.5430, -35.6751], "CO": [-74.2973, 4.5709], "MX": [-102.5528, 23.6345], "VN": [108.2772, 14.0583], "MY": [101.9758, 4.2105], "PH": [121.7740, 12.8797], "SG": [103.8198, 1.3521], "TH": [100.9925, 15.8700], "KR": [127.7669, 35.9078], "IL": [34.8516, 31.0461], "EE": [25.0136, 58.5953], "LV": [24.6032, 56.8796], "LT": [23.8813, 55.1694], "IS": [-19.0208, 64.9631], "PA": [-80.7821, 8.5380], "OM": [55.9233, 21.5126], "AG": [-61.7964, 17.0608], "SV": [-88.8965, 13.7942], "NI": [-85.2072, 12.8654], "KE": [37.9062, -0.0236], "SN": [-14.4524, 14.4974], "DZ": [1.6596, 28.0339], "LY": [17.2283, 26.3351], "DJ": [42.5903, 11.8251], "IR": [53.6880, 32.4279], "TJ": [71.2761, 38.8610], "BW": [24.6849, -22.3285], "NR": [166.9315, -0.5228], "FM": [158.1499, 7.4256], "KP": [127.5101, 40.3399], "CU": [-77.7812, 21.5218], "NG": [8.6753, 9.0820], "PG": [143.9555, -6.3150], "RS": [21.0059, 44.0165], "BA": [17.6791, 43.9159], "AL": [20.1683, 41.1533], "MD": [28.3699, 47.4116], "MK": [21.7453, 41.6086] };
 
-// MEGA WÖRTERBUCH FÜR REGIONEN (US/CA/EU) - Zentriert auf jeweilige Hauptstadt oder geografische Mitte
 const REGION_COORDS = {
-  // US States
-  "California": [-121.4944, 38.5816], "Texas": [-97.7431, 30.2672], "Florida": [-84.2807, 30.4383], "New York": [-73.7562, 42.6526], "Pennsylvania": [-76.8836, 40.2732], "Illinois": [-89.6501, 39.7817], "Ohio": [-82.9988, 39.9612], "Georgia": [-84.3880, 33.7490], "North Carolina": [-78.6382, 35.7796], "Michigan": [-84.5555, 42.7325], "New Jersey": [-74.7597, 40.2171], "Virginia": [-77.4360, 37.5407], "Washington": [-122.9007, 47.0379], "Arizona": [-112.0740, 33.4484], "Massachusetts": [-71.0589, 42.3601], "Tennessee": [-86.7816, 36.1627], "Indiana": [-86.1581, 39.7684], "Missouri": [-92.1735, 38.5767], "Maryland": [-76.4922, 38.9784], "Wisconsin": [-89.3842, 43.0731], "Colorado": [-104.9903, 39.7392], "Minnesota": [-93.1015, 44.9537], "South Carolina": [-81.0348, 34.0007], "Alabama": [-86.3006, 32.3668], "Louisiana": [-91.1403, 30.4515], "Kentucky": [-84.8733, 38.2009], "Oregon": [-123.0351, 44.9429], "Oklahoma": [-97.5164, 35.4676], "Connecticut": [-72.6851, 41.7658], "Utah": [-111.8910, 40.7608], "Iowa": [-93.6091, 41.5908], "Nevada": [-119.7674, 39.1638], "Arkansas": [-92.2896, 34.7465], "Mississippi": [-90.1848, 32.2988], "Kansas": [-95.6890, 39.0558], "New Mexico": [-105.9378, 35.6870], "Nebraska": [-96.6753, 40.8136], "Idaho": [-116.2023, 43.6150], "West Virginia": [-81.6326, 38.3498], "Hawaii": [-157.8583, 21.3069], "New Hampshire": [-71.5301, 43.2081], "Maine": [-69.7795, 44.3106], "Rhode Island": [-71.4128, 41.8240], "Montana": [-112.0391, 46.5958], "Delaware": [-75.5244, 39.1582], "South Dakota": [-100.3538, 44.3668], "North Dakota": [-100.7837, 46.8083], "Alaska": [-134.4197, 58.3019], "District of Columbia": [-77.0369, 38.9072], "Wyoming": [-104.8202, 41.1400], "Vermont": [-72.5754, 44.2601],
-  // Canada Provinces
-  "Ontario": [-79.3832, 43.6532], "Quebec": [-71.2080, 46.8139], "British Columbia": [-123.3656, 48.4284], "Alberta": [-113.4909, 53.5461], "Manitoba": [-97.1384, 49.8951], "Saskatchewan": [-104.6067, 50.4452], "Nova Scotia": [-63.5714, 44.6820], "New Brunswick": [-66.6436, 45.9636], "Newfoundland and Labrador": [-52.7126, 47.5615], "Prince Edward Island": [-63.1311, 46.2382],
-  // UK
+  "California": [-121.4944, 38.5816], "Texas": [-97.7431, 30.2672], "Florida": [-84.2807, 30.4383], "New York": [-73.7562, 42.6526], "Pennsylvania": [-76.8836, 40.2732], "Illinois": [-89.6501, 39.7817], "Ohio": [-82.9988, 39.9612], "Georgia": [-84.3880, 33.7490], "North Carolina": [-78.6382, 35.7796], "Michigan": [-84.5555, 42.7325], "New Jersey": [-74.7597, 40.2171], "Virginia": [-77.4360, 37.5407], "Washington": [-122.9007, 47.0379], "Arizona": [-112.0740, 33.4484], "Massachusetts": [-71.0589, 42.3601], "Tennessee": [-86.7816, 36.1627], "Indiana": [-86.1581, 39.7684], "Missouri": [-92.1735, 38.5767], "Maryland": [-76.4922, 38.9784], "Wisconsin": [-89.3842, 43.0731], "Colorado": [-104.9903, 39.7392], "Minnesota": [-93.1015, 44.9537], "South Carolina": [-81.0348, 34.0007], "Alabama": [-86.3006, 32.3668], "Louisiana": [-91.1403, 30.4515], "Kentucky": [-84.8733, 38.2009], "Oregon": [-123.0351, 44.9429], "Oklahoma": [-97.5164, 35.4676], "Connecticut": [-72.6851, 41.7658], "Utah": [-111.8910, 40.7608], "Iowa": [-93.6091, 41.5908], "Nevada": [-119.7674, 39.1638], "Arkansas": [-92.2896, 34.7465], "Mississippi": [-90.1848, 32.2988], "Kansas": [-95.6890, 39.0558], "New Mexico": [-105.9378, 35.6870], "Nebraska": [-96.6753, 40.8136], "Idaho": [-116.2023, 43.6150], "West Virginia": [-81.6326, 38.3498], "Hawaii": [-157.8583, 21.3069],
+  "Ontario": [-79.3832, 43.6532], "Quebec": [-71.2080, 46.8139], "British Columbia": [-123.3656, 48.4284], "Alberta": [-113.4909, 53.5461],
   "England": [-0.1276, 51.5072], "Scotland": [-3.1883, 55.9533], "Wales": [-3.1791, 51.4816], "Northern Ireland": [-5.9301, 54.5973],
-  // Germany
   "Bavaria": [11.5820, 48.1351], "North Rhine-Westphalia": [6.7735, 51.2277], "Baden-Württemberg": [9.1829, 48.7758], "Hesse": [8.2415, 50.0826], "Lower Saxony": [9.7320, 52.3705], "Rhineland-Palatinate": [8.2473, 49.9929], "Berlin": [13.4050, 52.5200], "Saxony": [13.7373, 51.0504], "Hamburg": [9.9937, 53.5511], "Schleswig-Holstein": [10.1228, 54.3233], "Brandenburg": [13.0645, 52.3906], "Saxony-Anhalt": [11.6276, 52.1205], "Thuringia": [11.0299, 50.9804], "Mecklenburg-Vorpommern": [11.4148, 53.6355], "Bremen": [8.8017, 53.0793], "Saarland": [6.9969, 49.2390],
-  // Spain
   "Andalusia": [-5.9845, 37.3891], "Catalonia": [2.1686, 41.3874], "Madrid": [-3.7038, 40.4168], "Valencian Community": [-0.3763, 39.4699], "Galicia": [-8.5457, 42.8782], "Castile and León": [-4.7245, 41.6520], "Basque Country": [-2.9350, 43.2630], "Canary Islands": [-15.4134, 28.1174], "Castilla-La Mancha": [-4.0273, 39.8628], "Murcia": [-1.1307, 37.9922], "Aragon": [-0.8810, 41.6488], "Extremadura": [-6.3408, 38.9161], "Balearic Islands": [2.6502, 39.5696], "Asturias": [-5.8494, 43.3614], "Navarre": [-1.6432, 42.8169], "Cantabria": [-3.8044, 43.4623], "La Rioja": [-2.4437, 42.4627],
-  // France
   "Île-de-France": [2.3522, 48.8566], "Auvergne-Rhône-Alpes": [4.8357, 45.7640], "Nouvelle-Aquitaine": [-0.5792, 44.8378], "Occitanie": [1.4442, 43.6047], "Hauts-de-France": [3.0573, 50.6292], "Provence-Alpes-Côte d'Azur": [5.3698, 43.2965], "Grand Est": [7.7521, 48.5734], "Pays de la Loire": [-1.5536, 47.2184], "Brittany": [-1.6778, 48.1147], "Normandy": [-0.3600, 49.1800], "Bourgogne-Franche-Comté": [5.0415, 47.3220], "Centre-Val de Loire": [1.9093, 47.9029], "Corsica": [8.7369, 41.9271],
-  // Italy
   "Lombardy": [9.1900, 45.4642], "Lazio": [12.4964, 41.9028], "Campania": [14.2681, 40.8518], "Sicily": [13.3614, 38.1157], "Veneto": [12.3155, 45.4408], "Emilia-Romagna": [11.3426, 44.4949], "Piedmont": [7.6869, 45.0703], "Apulia": [16.8719, 41.1171], "Tuscany": [11.2558, 43.7696], "Calabria": [16.5944, 38.9059], "Sardinia": [9.1114, 39.2153], "Liguria": [8.9463, 44.4056], "Marche": [13.5189, 43.6158], "Abruzzo": [13.3995, 42.3498], "Friuli-Venezia Giulia": [13.7768, 45.6495], "Trentino-South Tyrol": [11.1211, 46.0697], "Umbria": [12.3888, 43.1107], "Basilicata": [15.8051, 40.6404], "Molise": [14.6627, 41.5603], "Aosta Valley": [7.3201, 45.7373],
-  // Others / International Tests
-  "Tessin": [8.96, 46.20], "Ticino": [8.96, 46.20]
+  "Tessin": [8.96, 46.20], "Ticino": [8.96, 46.20], "Vorarlberg": [9.9065, 47.2304], "Salzburg": [13.0550, 47.8095], "Dubrovnik": [18.0944, 42.6507], "Liberec": [15.0562, 50.7671]
 };
 
 const PLANE_PATH = 'path://M1705.06,1318.313v-89.254l-319.9-221.799l0.073-208.063c0.521-84.662-26.629-121.796-63.961-121.491c-37.332-0.305-64.482,36.829-63.961,121.491l0.073,208.063l-319.9,221.799v89.254l330.343-157.288l12.238,241.308l-134.449,92.931l0.531,42.034l175.125-42.917l175.125,42.917l0.531-42.034l-134.449-92.931l12.238-241.308L1705.06,1318.313z';
@@ -237,9 +242,15 @@ export default function App() {
   const [adminAccDate1End, setAdminAccDate1End] = useState(lastWeekDates.end);
   const [adminAccDate2Start, setAdminAccDate2Start] = useState(twoWeeksAgoDates.start);
   const [adminAccDate2End, setAdminAccDate2End] = useState(twoWeeksAgoDates.end);
-  
   const [adminAccCurrCsv, setAdminAccCurrCsv] = useState(null);
   const [adminAccPrevCsv, setAdminAccPrevCsv] = useState(null);
+
+  const [adminAccDate3Start, setAdminAccDate3Start] = useState(dates30.cStart);
+  const [adminAccDate3End, setAdminAccDate3End] = useState(dates30.cEnd);
+  const [adminAccDate4Start, setAdminAccDate4Start] = useState(dates30.pStart);
+  const [adminAccDate4End, setAdminAccDate4End] = useState(dates30.pEnd);
+  const [adminAccCurrCsv2, setAdminAccCurrCsv2] = useState(null);
+  const [adminAccPrevCsv2, setAdminAccPrevCsv2] = useState(null);
   
   // --- STATE FLÜGE ---
   const [flightsGlobalDate, setFlightsGlobalDate] = useState("Lade Daten...");
@@ -253,8 +264,9 @@ export default function App() {
   const [activeCountries, setActiveCountries] = useState([]);
   const [availableDestCountries, setAvailableDestCountries] = useState([]);
   const [activeDestCountries, setActiveDestCountries] = useState([]);
-  const [timeframe, setTimeframe] = useState('84d'); 
+  const [timeframe, setTimeframe] = useState('7d'); 
   const [trendType, setTrendType] = useState('yoy'); 
+  const [trendFilter, setTrendFilter] = useState('all'); 
   const [minAdOppFilter, setMinAdOppFilter] = useState(''); 
   const [isDestExpanded, setIsDestExpanded] = useState(false);
 
@@ -262,6 +274,11 @@ export default function App() {
   const [accGlobalDate, setAccGlobalDate] = useState("Lade Daten...");
   const [accGlobalCurrCsv, setAccGlobalCurrCsv] = useState("");
   const [accGlobalPrevCsv, setAccGlobalPrevCsv] = useState("");
+  const [accGlobalDate2, setAccGlobalDate2] = useState("");
+  const [accGlobalCurrCsv2, setAccGlobalCurrCsv2] = useState("");
+  const [accGlobalPrevCsv2, setAccGlobalPrevCsv2] = useState("");
+  
+  const [accTimeframe, setAccTimeframe] = useState('set1'); 
   const [isDefaultDataAcc, setIsDefaultDataAcc] = useState(true);
   const [customAccDate, setCustomAccDate] = useState("");
   
@@ -271,7 +288,6 @@ export default function App() {
   const [activeAccCountries, setActiveAccCountries] = useState([]);
   const [accMinAdOppFilter, setAccMinAdOppFilter] = useState(''); 
   
-  // Regionen-Filter State
   const [availableAccRegions, setAvailableAccRegions] = useState([]);
   const [activeAccRegions, setActiveAccRegions] = useState([]);
   const [regionSearch, setRegionSearch] = useState('');
@@ -294,12 +310,11 @@ export default function App() {
   const chartInstance = useRef(null);
   const dropdownRef = useRef(null);
   
-  // Ref für den 4-Klick Admin Zugang
   const clickCountRef = useRef(0);
   const clickTimeoutRef = useRef(null);
 
   // ==========================================
-  // 1. INIT & AUTH (FIREBASE + ECHARTS)
+  // 1. INIT & AUTH
   // ==========================================
   useEffect(() => {
     if (!document.getElementById('echarts-core')) {
@@ -341,7 +356,6 @@ export default function App() {
     }
   }, []);
 
-  // Schließt das Regionen-Dropdown, wenn man außerhalb klickt
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -353,7 +367,7 @@ export default function App() {
   }, []);
 
   // ==========================================
-  // 2. FIREBASE DATEN LADEN (LIVE SUBSCRIPTION)
+  // 2. FIREBASE DATEN LADEN
   // ==========================================
   useEffect(() => {
     if (!user || !isFirebaseReady || !appId) return;
@@ -377,6 +391,10 @@ export default function App() {
         setAccGlobalCurrCsv(d.currentCsv || DEFAULT_ACC_CURRENT_CSV);
         setAccGlobalPrevCsv(d.prevCsv || DEFAULT_ACC_PREVIOUS_CSV);
         setAccGlobalDate(d.lastUpdated || "Unbekannt");
+        
+        setAccGlobalCurrCsv2(d.currentCsv2 || "");
+        setAccGlobalPrevCsv2(d.prevCsv2 || "");
+        setAccGlobalDate2(d.lastUpdated2 || "");
       } else {
         setAccGlobalCurrCsv(DEFAULT_ACC_CURRENT_CSV);
         setAccGlobalPrevCsv(DEFAULT_ACC_PREVIOUS_CSV);
@@ -389,7 +407,7 @@ export default function App() {
 
 
   // ==========================================
-  // 3. PARSING & UPDATE LOGIK (MIT AUTO-FILTER)
+  // 3. PARSING & UPDATE LOGIK
   // ==========================================
   const parseCSV = (csvText) => {
     if(!csvText) return [];
@@ -408,12 +426,14 @@ export default function App() {
       const destCountry = destFull.includes('-') ? destFull.split('-')[0].trim() : 'Unbekannt';
       const destCity = destFull.includes('-') ? destFull.split('-')[1].trim() : destFull;
       
-      // AUTO-FILTER für Flüge: Nur EU + US/CA als Ursprung zulassen. Ziele weltweit!
       const isOriginValid = ['US', 'CA'].includes(originCountry) || COUNTRY_TO_CONTINENT[originCountry] === 'Europa';
       if (!isOriginValid) continue;
 
-      const oCoord = CITY_COORDS[originCity] || COUNTRY_CENTER_COORDS[originCountry] || getFallbackCoord(originCity);
-      const dCoord = CITY_COORDS[destCity] || COUNTRY_CENTER_COORDS[destCountry] || getFallbackCoord(destCity);
+      const baseO = COUNTRY_CENTER_COORDS[originCountry];
+      const oCoord = CITY_COORDS[originCity] || (baseO ? getFallbackCoord(originCity, baseO) : getFallbackCoord(originCity));
+      
+      const baseD = COUNTRY_CENTER_COORDS[destCountry];
+      const dCoord = CITY_COORDS[destCity] || (baseD ? getFallbackCoord(destCity, baseD) : getFallbackCoord(destCity));
 
       parsedData.push({ 
         originCountry, originCity, destCountry, destCity, 
@@ -441,7 +461,6 @@ export default function App() {
            const destCountry = cols[1].trim();
            const destRegion = cols[2].trim();
            
-           // AUTO-FILTER für Unterkünfte: Ursprung EU + US/CA & Ziel nur EU
            const isOriginValid = ['US', 'CA'].includes(userCountry) || COUNTRY_TO_CONTINENT[userCountry] === 'Europa';
            const isDestValid = COUNTRY_TO_CONTINENT[destCountry] === 'Europa';
            if (!isOriginValid || !isDestValid) continue;
@@ -466,7 +485,6 @@ export default function App() {
     return joined;
   };
 
-  // Hilfs-Memo für das strukturierte Regionen-Menü
   const regionToCountry = useMemo(() => {
     const map = {};
     accData.forEach(d => {
@@ -499,16 +517,19 @@ export default function App() {
     }
   }, [flightsGlobalCsv, isDefaultDataFlights]);
 
+  // Lädt Acc-Daten dynamisch nach dem gewählten Zeitraum (Set1 / Set2)
   useEffect(() => {
     if (isDefaultDataAcc && accGlobalCurrCsv && accGlobalPrevCsv) {
-      const curr = parseAccCSV(accGlobalCurrCsv);
-      const prev = parseAccCSV(accGlobalPrevCsv);
+      const cCsv = accTimeframe === 'set1' ? accGlobalCurrCsv : (accGlobalCurrCsv2 || accGlobalCurrCsv);
+      const pCsv = accTimeframe === 'set1' ? accGlobalPrevCsv : (accGlobalPrevCsv2 || accGlobalPrevCsv);
+      const curr = parseAccCSV(cCsv);
+      const prev = parseAccCSV(pCsv);
       setAccData(mergeAccData(curr, prev));
     }
-  }, [accGlobalCurrCsv, accGlobalPrevCsv, isDefaultDataAcc]);
+  }, [accGlobalCurrCsv, accGlobalPrevCsv, accGlobalCurrCsv2, accGlobalPrevCsv2, accTimeframe, isDefaultDataAcc]);
 
   const initDefaultFlights = () => { setIsDefaultDataFlights(true); setCustomFlightDate(""); };
-  const initDefaultAcc = () => { setIsDefaultDataAcc(true); setCustomAccDate(""); };
+  const initDefaultAcc = () => { setIsDefaultDataAcc(true); setCustomAccDate(""); setAccTimeframe('set1'); };
 
 
   // ==========================================
@@ -532,23 +553,27 @@ export default function App() {
 
   const handleAdminSaveAcc = async () => {
     if (!user || !isFirebaseReady || !appId) return alert("Firebase nicht verbunden!");
-    if (!adminAccCurrCsv || !adminAccPrevCsv) return alert("Bitte BEIDE Dateien auswählen!");
     setIsSaving(true);
     try {
-      const textCurr = await adminAccCurrCsv.text();
-      const textPrev = await adminAccPrevCsv.text();
+      const updateObj = {};
+      if (adminAccCurrCsv && adminAccPrevCsv) {
+        updateObj.currentCsv = await adminAccCurrCsv.text();
+        updateObj.prevCsv = await adminAccPrevCsv.text();
+        updateObj.lastUpdated = `${formatRange(adminAccDate1Start, adminAccDate1End, "Aktuell")} vs ${formatRange(adminAccDate2Start, adminAccDate2End, "Vorher")}`;
+      }
+      if (adminAccCurrCsv2 && adminAccPrevCsv2) {
+        updateObj.currentCsv2 = await adminAccCurrCsv2.text();
+        updateObj.prevCsv2 = await adminAccPrevCsv2.text();
+        updateObj.lastUpdated2 = `${formatRange(adminAccDate3Start, adminAccDate3End, "Aktuell")} vs ${formatRange(adminAccDate4Start, adminAccDate4End, "Vorher")}`;
+      }
       
-      const l1 = formatRange(adminAccDate1Start, adminAccDate1End, "Aktuell");
-      const l2 = formatRange(adminAccDate2Start, adminAccDate2End, "Vorher");
-
-      await setDoc(getSafeDocRef(db, appId, 'appConfig', 'accommodations'), {
-        currentCsv: textCurr,
-        prevCsv: textPrev,
-        lastUpdated: `${l1} vs ${l2}`
-      });
+      if(Object.keys(updateObj).length > 0) {
+        await setDoc(getSafeDocRef(db, appId, 'appConfig', 'accommodations'), updateObj, { merge: true });
+      }
+      
       setIsAdminPanelOpen(false);
-      setAdminAccCurrCsv(null);
-      setAdminAccPrevCsv(null);
+      setAdminAccCurrCsv(null); setAdminAccPrevCsv(null);
+      setAdminAccCurrCsv2(null); setAdminAccPrevCsv2(null);
     } catch(err) { console.error(err); alert("Fehler beim Speichern!"); }
     setIsSaving(false);
   };
@@ -585,7 +610,6 @@ export default function App() {
     setIsDiyModalOpen(false);
   };
 
-  // Admin Zugang: 4 Klicks
   const handleLogoClick = () => {
     clickCountRef.current += 1;
     if (clickCountRef.current === 4) {
@@ -595,7 +619,7 @@ export default function App() {
     clearTimeout(clickTimeoutRef.current);
     clickTimeoutRef.current = setTimeout(() => {
       clickCountRef.current = 0;
-    }, 1500); 
+    }, 1000); 
   };
 
   // --- BERECHNUNGEN FÜR UI ---
@@ -640,9 +664,13 @@ export default function App() {
     return '#10b981';                     
   };
 
-  const filteredRegionsForSearch = availableAccRegions.filter(r => r.toLowerCase().includes(regionSearch.toLowerCase()));
+  const filteredRegionsForSearch = availableAccRegions.filter(r => {
+    const searchLower = regionSearch.toLowerCase();
+    const cCode = regionToCountry[r] || '';
+    const cName = COUNTRY_NAMES[cCode] || '';
+    return r.toLowerCase().includes(searchLower) || cName.toLowerCase().includes(searchLower) || cCode.toLowerCase().includes(searchLower);
+  });
   
-  // Gruppiere Regionen nach Land für das saubere Menü
   const groupedRegions = useMemo(() => {
     const groups = {};
     filteredRegionsForSearch.forEach(region => {
@@ -673,7 +701,8 @@ export default function App() {
         if (adOpp < minAd) minAd = adOpp;
         if (adOpp > maxAd) maxAd = adOpp;
         return { ...row, currentAdOpp: adOpp, currentTrend: trend, trendLabel };
-      }).filter(row => row.currentAdOpp > 0 && row.currentAdOpp >= activeMinAdOpp); 
+      }).filter(row => row.currentAdOpp > 0 && row.currentAdOpp >= activeMinAdOpp)
+        .filter(row => trendFilter === 'all' ? true : (trendFilter === 'positive' ? row.currentTrend >= 0 : row.currentTrend < 0));
 
       if (minAd === maxAd) minAd = 0;
 
@@ -720,7 +749,7 @@ export default function App() {
         activeAccCountries.includes(r.userCountry) &&
         activeAccRegions.includes(r.destRegion) &&
         r.adOpp >= activeMinAdOpp
-      );
+      ).filter(row => trendFilter === 'all' ? true : (trendFilter === 'positive' ? row.trend >= 0 : row.trend < 0));
       
       let minAd = Infinity, maxAd = -Infinity;
       filteredData.forEach(row => { if (row.adOpp < minAd) minAd = row.adOpp; if (row.adOpp > maxAd) maxAd = row.adOpp; });
@@ -733,16 +762,10 @@ export default function App() {
       filteredData.forEach(row => {
         const originCoord = COUNTRY_CENTER_COORDS[row.userCountry] || getFallbackCoord(row.userCountry);
         
-        // Smarter Fallback: Region zentriert auf ihre geografische Hauptkoordinate (oder Trauben-Verteilung, wenn absolut unbekannt)
         let destCoord = REGION_COORDS[row.destRegion];
         if (!destCoord) {
           const baseCoord = COUNTRY_CENTER_COORDS[row.destCountry] || getFallbackCoord(row.destCountry);
-          let hash = 0;
-          const str = row.destRegion || "unknown";
-          for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
-          const offsetLon = (Math.abs(hash) % 60) / 10 - 3; 
-          const offsetLat = ((Math.abs(hash) >> 5) % 60) / 10 - 3;
-          destCoord = [baseCoord[0] + offsetLon, baseCoord[1] + offsetLat];
+          destCoord = getFallbackCoord(row.destRegion || "unknown", baseCoord);
         }
         
         const width = (maxAd > minAd) ? (1.5 + 3.5 * ((row.adOpp - minAd) / (maxAd - minAd))) : 3;
@@ -806,7 +829,7 @@ export default function App() {
     const handleResize = () => chartInstance.current?.resize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [data, timeframe, trendType, echartsReady, disabledRoutes, activeCountries, activeDestCountries, minAdOppFilter, activeTab, accData, accFilterType, activeAccCountries, activeAccRegions, accMinAdOppFilter]);
+  }, [data, timeframe, trendType, trendFilter, echartsReady, disabledRoutes, activeCountries, activeDestCountries, minAdOppFilter, activeTab, accData, accFilterType, activeAccCountries, activeAccRegions, accMinAdOppFilter]);
 
   const toggleDisabledRoute = (routeId) => setDisabledRoutes(prev => prev.filter(id => id !== routeId));
   const toggleCountry = (country) => setActiveCountries(prev => prev.includes(country) ? prev.filter(c => c !== country) : [...prev, country]);
@@ -856,7 +879,7 @@ export default function App() {
                 <p className="text-sm font-medium text-slate-200">
                   {activeTab === 'flights' 
                     ? (isDefaultDataFlights ? flightsGlobalDate : customFlightDate)
-                    : (isDefaultDataAcc ? accGlobalDate : customAccDate)
+                    : (isDefaultDataAcc ? (accTimeframe === 'set1' ? accGlobalDate : (accGlobalDate2 || "Kein zweiter Zeitraum hinterlegt")) : customAccDate)
                   }
                 </p>
               </div>
@@ -893,7 +916,7 @@ export default function App() {
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {availableCountries.map(country => (
-                      <button key={country} onClick={() => toggleCountry(country)} title={COUNTRY_NAMES[country] || country} className={`flex justify-center items-center p-1.5 rounded transition-colors border ${activeCountries.includes(country) ? 'bg-blue-600/20 border-blue-500 opacity-100' : 'bg-slate-800 border-slate-700 hover:bg-slate-700 opacity-50 grayscale'}`}>
+                      <button key={country} onClick={() => toggleCountry(country)} title={COUNTRY_NAMES[country] || country} className={`flex justify-center items-center p-1.5 rounded transition-colors border ${activeCountries.includes(country) ? 'bg-blue-600/20 border-blue-500 opacity-100 shadow-sm scale-100' : 'bg-slate-800 border-slate-700 hover:bg-slate-700 opacity-30 grayscale scale-95'}`}>
                         <img src={`https://flagcdn.com/w40/${country.toLowerCase()}.png`} alt={country} className="w-6 rounded-sm shadow-sm" />
                       </button>
                     ))}
@@ -923,7 +946,7 @@ export default function App() {
                             {destByContinent[continent].map(country => {
                               const isValid = validDestCountries.includes(country); 
                               return (
-                                <button key={`dest-${country}`} onClick={() => isValid && toggleDestCountry(country)} title={!isValid ? `${COUNTRY_NAMES[country] || country} (Keine Routen)` : (COUNTRY_NAMES[country] || country)} className={`flex justify-center items-center p-1.5 rounded transition-colors border ${!isValid ? 'opacity-10 cursor-not-allowed bg-slate-900 border-slate-800 grayscale' : activeDestCountries.includes(country) ? 'bg-emerald-600/20 border-emerald-500 opacity-100' : 'bg-slate-800 border-slate-700 hover:bg-slate-700 opacity-50 grayscale'}`}>
+                                <button key={`dest-${country}`} onClick={() => isValid && toggleDestCountry(country)} title={!isValid ? `${COUNTRY_NAMES[country] || country} (Keine Routen)` : (COUNTRY_NAMES[country] || country)} className={`flex justify-center items-center p-1.5 rounded transition-colors border ${!isValid ? 'opacity-10 cursor-not-allowed bg-slate-900 border-slate-800 grayscale' : activeDestCountries.includes(country) ? 'bg-emerald-600/20 border-emerald-500 opacity-100 shadow-sm scale-100' : 'bg-slate-800 border-slate-700 hover:bg-slate-700 opacity-30 grayscale scale-95'}`}>
                                   <img src={`https://flagcdn.com/w40/${country.toLowerCase()}.png`} alt={country} className="w-6 rounded-sm shadow-sm" />
                                 </button>
                               );
@@ -962,6 +985,15 @@ export default function App() {
                 </div>
               </div>
 
+              <div className="mb-6">
+                <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2"><Filter className="w-4 h-4" /> Trend Filter</h2>
+                <div className="flex gap-2">
+                  <button onClick={() => setTrendFilter('all')} className={`flex-1 py-1.5 text-[10px] font-bold rounded transition-colors ${trendFilter === 'all' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-300 bg-slate-800'}`}>Alle</button>
+                  <button onClick={() => setTrendFilter('positive')} className={`flex-1 py-1.5 text-[10px] font-bold rounded transition-colors ${trendFilter === 'positive' ? 'bg-emerald-600 text-white' : 'text-emerald-500/50 hover:text-emerald-400 bg-slate-800'}`}>Nur Positiv</button>
+                  <button onClick={() => setTrendFilter('negative')} className={`flex-1 py-1.5 text-[10px] font-bold rounded transition-colors ${trendFilter === 'negative' ? 'bg-red-600 text-white' : 'text-red-500/50 hover:text-red-400 bg-slate-800'}`}>Nur Negativ</button>
+                </div>
+              </div>
+
               {disabledRoutes.length > 0 && (
                 <div className="mb-6">
                   <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2"><EyeOff className="w-4 h-4" /> Ausgeblendete Routen</h2>
@@ -980,6 +1012,13 @@ export default function App() {
           {/* FILTER BEREICH (UNTERKÜNFTE) */}
           {activeTab === 'accommodations' && accData.length > 0 && (
             <>
+              {isDefaultDataAcc && (
+                <div className="mb-6 bg-slate-800/80 p-1.5 rounded-lg border border-slate-700 flex gap-1.5">
+                   <button onClick={() => setAccTimeframe('set1')} className={`flex-1 py-1.5 text-xs font-bold rounded transition-colors ${accTimeframe === 'set1' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-700/50'}`}>Zeitraum 1</button>
+                   <button onClick={() => setAccTimeframe('set2')} className={`flex-1 py-1.5 text-xs font-bold rounded transition-colors ${accTimeframe === 'set2' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-700/50'}`}>Zeitraum 2</button>
+                </div>
+              )}
+
               {availableAccCountries.length > 0 && (
                 <div className="mb-6">
                   <div className="flex justify-between items-end mb-2">
@@ -992,7 +1031,7 @@ export default function App() {
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {availableAccCountries.map(country => (
-                      <button key={country} onClick={() => toggleAccCountry(country)} title={COUNTRY_NAMES[country] || country} className={`flex justify-center items-center p-1.5 rounded transition-colors border ${activeAccCountries.includes(country) ? 'bg-indigo-600/20 border-indigo-500 opacity-100' : 'bg-slate-800 border-slate-700 hover:bg-slate-700 opacity-50 grayscale'}`}>
+                      <button key={country} onClick={() => toggleAccCountry(country)} title={COUNTRY_NAMES[country] || country} className={`flex justify-center items-center p-1.5 rounded transition-colors border ${activeAccCountries.includes(country) ? 'bg-indigo-600/20 border-indigo-500 opacity-100 shadow-sm scale-100' : 'bg-slate-800 border-slate-700 hover:bg-slate-700 opacity-30 grayscale scale-95'}`}>
                         <img src={`https://flagcdn.com/w40/${country.toLowerCase()}.png`} alt={country} className="w-6 rounded-sm shadow-sm" />
                       </button>
                     ))}
@@ -1022,7 +1061,7 @@ export default function App() {
                         <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
                         <input 
                           type="text" 
-                          placeholder="Region suchen..." 
+                          placeholder="Region oder Land suchen..." 
                           value={regionSearch} 
                           onChange={(e) => setRegionSearch(e.target.value)} 
                           className="w-full bg-slate-900 text-slate-200 text-sm rounded pl-8 pr-3 py-1.5 focus:outline-none focus:border-indigo-500 border border-slate-700" 
@@ -1100,10 +1139,19 @@ export default function App() {
                   </div>
                 </div>
               </div>
+
+              <div className="mb-6">
+                <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2"><Filter className="w-4 h-4" /> Trend Filter</h2>
+                <div className="flex gap-2">
+                  <button onClick={() => setTrendFilter('all')} className={`flex-1 py-1.5 text-[10px] font-bold rounded transition-colors ${trendFilter === 'all' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-300 bg-slate-800'}`}>Alle</button>
+                  <button onClick={() => setTrendFilter('positive')} className={`flex-1 py-1.5 text-[10px] font-bold rounded transition-colors ${trendFilter === 'positive' ? 'bg-emerald-600 text-white' : 'text-emerald-500/50 hover:text-emerald-400 bg-slate-800'}`}>Nur Positiv</button>
+                  <button onClick={() => setTrendFilter('negative')} className={`flex-1 py-1.5 text-[10px] font-bold rounded transition-colors ${trendFilter === 'negative' ? 'bg-red-600 text-white' : 'text-red-500/50 hover:text-red-400 bg-slate-800'}`}>Nur Negativ</button>
+                </div>
+              </div>
               
               <div className="text-center p-3 bg-emerald-900/20 border border-emerald-800/50 rounded-lg mb-6">
                 <p className="text-sm text-emerald-400 font-semibold">
-                  {accData.filter(r => (accFilterType === 'All' || r.type === accFilterType) && activeAccCountries.includes(r.userCountry) && activeAccRegions.includes(r.destRegion) && r.adOpp >= (Number(accMinAdOppFilter) || 0)).length} Routen berechnet
+                  {accData.filter(r => (accFilterType === 'All' || r.type === accFilterType) && activeAccCountries.includes(r.userCountry) && activeAccRegions.includes(r.destRegion) && r.adOpp >= (Number(accMinAdOppFilter) || 0)).filter(row => trendFilter === 'all' ? true : (trendFilter === 'positive' ? row.trend >= 0 : row.trend < 0)).length} Routen berechnet
                 </p>
                 <p className="text-xs text-slate-400 mt-1">Gehe mit der Maus über die pulsierenden Regionen, um Details zu sehen.</p>
               </div>
@@ -1145,7 +1193,7 @@ export default function App() {
               title="Pro Workspace (DIY Analytics)"
             />
           </div>
-          <span className="text-[10px] text-slate-600">v1.9</span>
+          <span className="text-[10px] text-slate-600">v2.0</span>
         </div>
       </div>
 
@@ -1219,54 +1267,109 @@ export default function App() {
                   {/* UNTERKÜNFTE ADMIN */}
                   <div className="bg-slate-800 p-5 rounded-lg border border-slate-700">
                     <h3 className="text-lg font-bold text-indigo-400 flex items-center gap-2 mb-4"><Bed className="w-5 h-5"/> Unterkünfte (Datenbank)</h3>
-                    <div className="space-y-4">
+                    
+                    <div className="space-y-6">
                       
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-400 mb-1">Zeitraum Aktuell (Current)</label>
-                          <div className="flex gap-2 mb-3">
-                             <input type="date" value={adminAccDate1Start} onChange={(e) => setAdminAccDate1Start(e.target.value)} className="w-full bg-slate-900 border border-slate-600 text-slate-200 text-xs rounded px-2 py-2" title="Von" />
-                             <input type="date" value={adminAccDate1End} onChange={(e) => setAdminAccDate1End(e.target.value)} className="w-full bg-slate-900 border border-slate-600 text-slate-200 text-xs rounded px-2 py-2" title="Bis" />
+                      {/* SET 1: Z.B. 7 TAGE */}
+                      <div className="p-4 border border-slate-600 rounded bg-slate-900/40">
+                        <h4 className="text-sm font-bold text-indigo-400 mb-3 border-b border-slate-700 pb-2">Zeitraum 1 (z.B. WoW / 7 Tage)</h4>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-[10px] font-semibold text-slate-400 mb-1">Aktuell (Current)</label>
+                            <div className="flex gap-2 mb-3">
+                               <input type="date" value={adminAccDate1Start} onChange={(e) => setAdminAccDate1Start(e.target.value)} className="w-full bg-slate-900 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1.5" title="Von" />
+                               <input type="date" value={adminAccDate1End} onChange={(e) => setAdminAccDate1End(e.target.value)} className="w-full bg-slate-900 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1.5" title="Bis" />
+                            </div>
+                            <label className={`flex flex-col items-center justify-center w-full p-3 border-2 border-dashed rounded cursor-pointer transition-colors ${adminAccCurrCsv ? 'border-emerald-500 bg-emerald-500/10' : 'border-indigo-500/50 hover:border-indigo-400 hover:bg-slate-700'}`}>
+                              {adminAccCurrCsv ? (
+                                <div className="flex flex-col items-center gap-1 text-emerald-400 text-center">
+                                  <CheckCircle className="w-4 h-4" />
+                                  <span className="text-[10px] font-medium break-all px-1">{adminAccCurrCsv.name}</span>
+                                </div>
+                              ) : (
+                                <div className="flex flex-col items-center gap-1 text-slate-300">
+                                  <Upload className="w-4 h-4 text-indigo-400" />
+                                  <span className="text-[10px] font-medium">CSV Datei wählen</span>
+                                </div>
+                              )}
+                              <input type="file" accept=".csv" className="hidden" onChange={(e) => setAdminAccCurrCsv(e.target.files[0])} />
+                            </label>
                           </div>
-                          <label className={`flex flex-col items-center justify-center w-full p-3 border-2 border-dashed rounded cursor-pointer transition-colors ${adminAccCurrCsv ? 'border-emerald-500 bg-emerald-500/10' : 'border-indigo-500/50 hover:border-indigo-400 hover:bg-slate-700'}`}>
-                            {adminAccCurrCsv ? (
-                              <div className="flex flex-col items-center gap-1 text-emerald-400 text-center">
-                                <CheckCircle className="w-4 h-4" />
-                                <span className="text-[10px] font-medium break-all px-1">{adminAccCurrCsv.name}</span>
-                              </div>
-                            ) : (
-                              <div className="flex flex-col items-center gap-1 text-slate-300">
-                                <Upload className="w-4 h-4 text-indigo-400" />
-                                <span className="text-[10px] font-medium">CSV Datei wählen</span>
-                              </div>
-                            )}
-                            <input type="file" accept=".csv" className="hidden" onChange={(e) => setAdminAccCurrCsv(e.target.files[0])} />
-                          </label>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-400 mb-1">Zeitraum Vorher (Previous)</label>
-                          <div className="flex gap-2 mb-3">
-                             <input type="date" value={adminAccDate2Start} onChange={(e) => setAdminAccDate2Start(e.target.value)} className="w-full bg-slate-900 border border-slate-600 text-slate-200 text-xs rounded px-2 py-2" title="Von" />
-                             <input type="date" value={adminAccDate2End} onChange={(e) => setAdminAccDate2End(e.target.value)} className="w-full bg-slate-900 border border-slate-600 text-slate-200 text-xs rounded px-2 py-2" title="Bis" />
+                          <div>
+                            <label className="block text-[10px] font-semibold text-slate-400 mb-1">Vorher (Previous)</label>
+                            <div className="flex gap-2 mb-3">
+                               <input type="date" value={adminAccDate2Start} onChange={(e) => setAdminAccDate2Start(e.target.value)} className="w-full bg-slate-900 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1.5" title="Von" />
+                               <input type="date" value={adminAccDate2End} onChange={(e) => setAdminAccDate2End(e.target.value)} className="w-full bg-slate-900 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1.5" title="Bis" />
+                            </div>
+                            <label className={`flex flex-col items-center justify-center w-full p-3 border-2 border-dashed rounded cursor-pointer transition-colors ${adminAccPrevCsv ? 'border-emerald-500 bg-emerald-500/10' : 'border-indigo-500/50 hover:border-indigo-400 hover:bg-slate-700'}`}>
+                              {adminAccPrevCsv ? (
+                                <div className="flex flex-col items-center gap-1 text-emerald-400 text-center">
+                                  <CheckCircle className="w-4 h-4" />
+                                  <span className="text-[10px] font-medium break-all px-1">{adminAccPrevCsv.name}</span>
+                                </div>
+                              ) : (
+                                <div className="flex flex-col items-center gap-1 text-slate-300">
+                                  <Upload className="w-4 h-4 text-indigo-400" />
+                                  <span className="text-[10px] font-medium">CSV Datei wählen</span>
+                                </div>
+                              )}
+                              <input type="file" accept=".csv" className="hidden" onChange={(e) => setAdminAccPrevCsv(e.target.files[0])} />
+                            </label>
                           </div>
-                          <label className={`flex flex-col items-center justify-center w-full p-3 border-2 border-dashed rounded cursor-pointer transition-colors ${adminAccPrevCsv ? 'border-emerald-500 bg-emerald-500/10' : 'border-indigo-500/50 hover:border-indigo-400 hover:bg-slate-700'}`}>
-                            {adminAccPrevCsv ? (
-                              <div className="flex flex-col items-center gap-1 text-emerald-400 text-center">
-                                <CheckCircle className="w-4 h-4" />
-                                <span className="text-[10px] font-medium break-all px-1">{adminAccPrevCsv.name}</span>
-                              </div>
-                            ) : (
-                              <div className="flex flex-col items-center gap-1 text-slate-300">
-                                <Upload className="w-4 h-4 text-indigo-400" />
-                                <span className="text-[10px] font-medium">CSV Datei wählen</span>
-                              </div>
-                            )}
-                            <input type="file" accept=".csv" className="hidden" onChange={(e) => setAdminAccPrevCsv(e.target.files[0])} />
-                          </label>
                         </div>
                       </div>
-                      <button onClick={handleAdminSaveAcc} disabled={isSaving || !adminAccCurrCsv || !adminAccPrevCsv} className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-bold rounded flex items-center justify-center gap-2 transition-colors">
-                        <CloudUpload className="w-4 h-4"/> Für alle Nutzer speichern
+
+                      {/* SET 2: Z.B. 30 TAGE */}
+                      <div className="p-4 border border-slate-600 rounded bg-slate-900/40">
+                        <h4 className="text-sm font-bold text-indigo-400 mb-3 border-b border-slate-700 pb-2">Zeitraum 2 (z.B. MoM / 30 Tage)</h4>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-[10px] font-semibold text-slate-400 mb-1">Aktuell (Current)</label>
+                            <div className="flex gap-2 mb-3">
+                               <input type="date" value={adminAccDate3Start} onChange={(e) => setAdminAccDate3Start(e.target.value)} className="w-full bg-slate-900 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1.5" title="Von" />
+                               <input type="date" value={adminAccDate3End} onChange={(e) => setAdminAccDate3End(e.target.value)} className="w-full bg-slate-900 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1.5" title="Bis" />
+                            </div>
+                            <label className={`flex flex-col items-center justify-center w-full p-3 border-2 border-dashed rounded cursor-pointer transition-colors ${adminAccCurrCsv2 ? 'border-emerald-500 bg-emerald-500/10' : 'border-indigo-500/50 hover:border-indigo-400 hover:bg-slate-700'}`}>
+                              {adminAccCurrCsv2 ? (
+                                <div className="flex flex-col items-center gap-1 text-emerald-400 text-center">
+                                  <CheckCircle className="w-4 h-4" />
+                                  <span className="text-[10px] font-medium break-all px-1">{adminAccCurrCsv2.name}</span>
+                                </div>
+                              ) : (
+                                <div className="flex flex-col items-center gap-1 text-slate-300">
+                                  <Upload className="w-4 h-4 text-indigo-400" />
+                                  <span className="text-[10px] font-medium">CSV Datei wählen</span>
+                                </div>
+                              )}
+                              <input type="file" accept=".csv" className="hidden" onChange={(e) => setAdminAccCurrCsv2(e.target.files[0])} />
+                            </label>
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-semibold text-slate-400 mb-1">Vorher (Previous)</label>
+                            <div className="flex gap-2 mb-3">
+                               <input type="date" value={adminAccDate4Start} onChange={(e) => setAdminAccDate4Start(e.target.value)} className="w-full bg-slate-900 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1.5" title="Von" />
+                               <input type="date" value={adminAccDate4End} onChange={(e) => setAdminAccDate4End(e.target.value)} className="w-full bg-slate-900 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1.5" title="Bis" />
+                            </div>
+                            <label className={`flex flex-col items-center justify-center w-full p-3 border-2 border-dashed rounded cursor-pointer transition-colors ${adminAccPrevCsv2 ? 'border-emerald-500 bg-emerald-500/10' : 'border-indigo-500/50 hover:border-indigo-400 hover:bg-slate-700'}`}>
+                              {adminAccPrevCsv2 ? (
+                                <div className="flex flex-col items-center gap-1 text-emerald-400 text-center">
+                                  <CheckCircle className="w-4 h-4" />
+                                  <span className="text-[10px] font-medium break-all px-1">{adminAccPrevCsv2.name}</span>
+                                </div>
+                              ) : (
+                                <div className="flex flex-col items-center gap-1 text-slate-300">
+                                  <Upload className="w-4 h-4 text-indigo-400" />
+                                  <span className="text-[10px] font-medium">CSV Datei wählen</span>
+                                </div>
+                              )}
+                              <input type="file" accept=".csv" className="hidden" onChange={(e) => setAdminAccPrevCsv2(e.target.files[0])} />
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+
+                      <button onClick={handleAdminSaveAcc} disabled={isSaving || (!adminAccCurrCsv && !adminAccCurrCsv2)} className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-bold rounded flex items-center justify-center gap-2 transition-colors">
+                        <CloudUpload className="w-4 h-4"/> Eingegebene Sets speichern
                       </button>
                     </div>
                   </div>
