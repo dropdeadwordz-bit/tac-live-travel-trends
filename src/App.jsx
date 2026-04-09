@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Upload, Map as MapIcon, Calendar, TrendingUp, XCircle, EyeOff, Filter, SlidersHorizontal, ChevronDown, ChevronUp, Bed, CheckCircle, RefreshCw, Lock, Database, X, CloudUpload } from 'lucide-react';
+import { Upload, Map as MapIcon, Calendar, TrendingUp, XCircle, EyeOff, Filter, SlidersHorizontal, ChevronDown, ChevronUp, Bed, CheckCircle, RefreshCw, Lock, Database, X, CloudUpload, Search } from 'lucide-react';
 
 // === FIREBASE IMPORTS ===
 import { initializeApp } from 'firebase/app';
@@ -66,12 +66,29 @@ const formatRange = (start, end, fallback) => {
   return fallback;
 };
 
-// Fallback-Algorithmus, falls ein Land/Stadt völlig unbekannt ist (verhindert Datenverlust)
+// Berechnet automatisch "Letzte Woche Mo-So" und "Vorletzte Woche Mo-So"
+const getPreviousWeekDates = (weeksAgo) => {
+  const d = new Date();
+  const day = d.getDay() === 0 ? 7 : d.getDay(); // 1=Mon, 7=Sun
+  d.setDate(d.getDate() - day); // Geht zum letzten Sonntag
+  d.setDate(d.getDate() - (weeksAgo - 1) * 7); // Springt X Wochen zurück
+  const end = new Date(d);
+  const start = new Date(d);
+  start.setDate(start.getDate() - 6); // Geht zum zugehörigen Montag
+  return {
+    start: start.toISOString().split('T')[0],
+    end: end.toISOString().split('T')[0]
+  };
+};
+
+const lastWeekDates = getPreviousWeekDates(1);
+const twoWeeksAgoDates = getPreviousWeekDates(2);
+
+// Fallback-Algorithmus, falls ein Land/Stadt völlig unbekannt ist
 const getFallbackCoord = (str) => {
   if(!str) return [0,0];
   let hash = 0;
   for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
-  // Platziert unbekannte Hotspots im Ozean, um sie sichtbar zu halten, ohne bestehende Länder zu überlagern
   const lon = -40 + (Math.abs(hash) % 20); 
   const lat = 10 + ((Math.abs(hash) >> 5) % 30);
   return [lon, lat];
@@ -82,26 +99,16 @@ const getFallbackCoord = (str) => {
 // ==========================================
 const DEFAULT_FLIGHTS_CSV = `Route,,,Last 84 Days,,Last 28 Days,,,Last 7 Days,,
 Origin,Destination,Route ID,Ad Opp.,YoY,Ad Opp.,MoM,YoY,Ad Opp.,WoW,YoY
-GB - London,AE - Dubai,LON-DXB,700000,0.263,200000,-0.397,0.094,30000,-0.239,-0.419
+GB - London,ES - Barcelona,LON-BCN,700000,0.263,200000,-0.397,0.094,30000,-0.239,-0.419
 US - New York,GB - London,NYC-LON,500000,-0.008,200000,0.597,0.33,40000,-0.053,-0.126
-GB - London,US - New York,LON-NYC,500000,-0.191,100000,-0.145,-0.258,30000,-0.07,-0.232
-DE - Frankfurt,US - New York,FRA-NYC,200000,-0.128,60000,-0.047,-0.165,20000,0.031,-0.133
+DE - Frankfurt,ES - Palma de Mallorca,FRA-PMI,200000,-0.128,60000,-0.047,-0.165,20000,0.031,-0.133
 AT - Vienna,ES - Barcelona,VIE-BCN,80000,-0.115,20000,-0.052,-0.132,6000,-0.057,-0.172
 CH - Zürich,ES - Barcelona,ZRH-BCN,70000,0.06,30000,0.174,0.099,7000,-0.018,0.13`;
 
 const DEFAULT_ACC_CURRENT_CSV = `User Country,Destination Country,Destination Region,Domestic / Int'l,Ad Opp.
 GB,GB,England,Domestic,7000000
-US,US,Florida,Domestic,5000000
-US,US,California,Domestic,5000000
-US,US,Texas,Domestic,2000000
-IN,IN,Maharashtra,Domestic,2000000
-BR,BR,State of São Paulo,Domestic,2000000
-JP,JP,Tokyo,Domestic,2000000
-US,US,New York,Domestic,2000000
-JP,JP,Osaka,Domestic,1000000
-CA,CA,Ontario,Domestic,1000000
-US,US,Tennessee,Domestic,1000000
-IN,IN,Karnataka,Domestic,1000000
+US,ES,Andalusia,International,5000000
+US,FR,Île-de-France,International,2000000
 DE,DE,Bavaria,Domestic,1000000
 GB,GB,Scotland,Domestic,1000000
 ES,ES,Valencian Community,Domestic,1000000
@@ -109,17 +116,8 @@ IT,CH,Tessin,International,500000`;
 
 const DEFAULT_ACC_PREVIOUS_CSV = `User Country,Destination Country,Destination Region,Domestic / Int'l,Ad Opp.
 GB,GB,England,Domestic,6800000
-US,US,Florida,Domestic,5200000
-US,US,California,Domestic,4800000
-US,US,Texas,Domestic,1900000
-IN,IN,Maharashtra,Domestic,1500000
-BR,BR,State of São Paulo,Domestic,2100000
-JP,JP,Tokyo,Domestic,2000000
-US,US,New York,Domestic,1800000
-JP,JP,Osaka,Domestic,1100000
-CA,CA,Ontario,Domestic,950000
-US,US,Tennessee,Domestic,1050000
-IN,IN,Karnataka,Domestic,800000
+US,ES,Andalusia,International,4800000
+US,FR,Île-de-France,International,1900000
 DE,DE,Bavaria,Domestic,900000
 GB,GB,Scotland,Domestic,1050000
 ES,ES,Valencian Community,Domestic,800000
@@ -134,13 +132,13 @@ const getFlagImgHtml = (countryCode) => {
   return `<img src="https://flagcdn.com/w20/${countryCode.toLowerCase()}.png" style="width:16px; height:auto; display:inline-block; vertical-align:middle; border-radius:2px; margin-right:4px; box-shadow: 0 1px 2px rgba(0,0,0,0.2);" alt="${countryCode}" />`;
 };
 
-const COUNTRY_NAMES = { "DE": "Deutschland", "AT": "Österreich", "CH": "Schweiz", "US": "USA", "GB": "Großbritannien", "FR": "Frankreich", "ES": "Spanien", "IT": "Italien", "NL": "Niederlande", "TR": "Türkei", "AE": "Ver. Arab. Emirate", "TH": "Thailand", "SG": "Singapur", "CZ": "Tschechien", "PR": "Puerto Rico", "BB": "Barbados", "BE": "Belgien", "HU": "Ungarn", "IL": "Israel", "CA": "Kanada", "BG": "Bulgarien", "IE": "Irland", "MX": "Mexiko", "VE": "Venezuela", "MA": "Marokko", "IN": "Indien", "DZ": "Algerien", "EG": "Ägypten", "ZA": "Südafrika", "GR": "Griechenland", "CY": "Zypern", "HR": "Kroatien", "PT": "Portugal", "JP": "Japan", "BR": "Brasilien", "CN": "China", "RU": "Russland", "UA": "Ukraine", "ID": "Indonesien", "SK": "Slowakei", "PL": "Polen", "LU": "Luxemburg", "SE": "Schweden", "NO": "Norwegen", "DK": "Dänemark", "FI": "Finnland", "RO": "Rumänien", "AU": "Australien", "NZ": "Neuseeland", "AR": "Argentinien", "CL": "Chile", "CO": "Kolumbien", "VN": "Vietnam", "MY": "Malaysia", "PH": "Philippinen", "KR": "Südkorea" };
-const COUNTRY_TO_CONTINENT = { "DE": "Europa", "AT": "Europa", "CH": "Europa", "GB": "Europa", "FR": "Europa", "ES": "Europa", "IT": "Europa", "NL": "Europa", "CZ": "Europa", "BE": "Europa", "HU": "Europa", "BG": "Europa", "IE": "Europa", "GR": "Europa", "CY": "Europa", "MT": "Europa", "HR": "Europa", "IS": "Europa", "NO": "Europa", "SE": "Europa", "DK": "Europa", "FI": "Europa", "PL": "Europa", "RO": "Europa", "PT": "Europa", "UA": "Europa", "LU": "Europa", "SK": "Europa", "US": "Nord- & Mittelamerika", "CA": "Nord- & Mittelamerika", "MX": "Nord- & Mittelamerika", "PR": "Nord- & Mittelamerika", "BB": "Nord- & Mittelamerika", "BR": "Südamerika", "AR": "Südamerika", "CO": "Südamerika", "CL": "Südamerika", "TH": "Asien", "SG": "Asien", "IN": "Asien", "JP": "Asien", "CN": "Asien", "RU": "Asien", "ID": "Asien", "VN": "Asien", "MY": "Asien", "PH": "Asien", "KR": "Asien", "TR": "Naher Osten", "AE": "Naher Osten", "IL": "Naher Osten", "QA": "Naher Osten", "SA": "Naher Osten", "EG": "Afrika", "ZA": "Afrika", "MA": "Afrika", "AU": "Ozeanien", "NZ": "Ozeanien" };
+const COUNTRY_NAMES = { "DE": "Deutschland", "AT": "Österreich", "CH": "Schweiz", "US": "USA", "GB": "Großbritannien", "FR": "Frankreich", "ES": "Spanien", "IT": "Italien", "NL": "Niederlande", "TR": "Türkei", "AE": "Ver. Arab. Emirate", "TH": "Thailand", "SG": "Singapur", "CZ": "Tschechien", "PR": "Puerto Rico", "BB": "Barbados", "BE": "Belgien", "HU": "Ungarn", "IL": "Israel", "CA": "Kanada", "BG": "Bulgarien", "IE": "Irland", "MX": "Mexiko", "VE": "Venezuela", "MA": "Marokko", "IN": "Indien", "DZ": "Algerien", "EG": "Ägypten", "ZA": "Südafrika", "GR": "Griechenland", "CY": "Zypern", "HR": "Kroatien", "PT": "Portugal", "JP": "Japan", "BR": "Brasilien", "CN": "China", "RU": "Russland", "UA": "Ukraine", "ID": "Indonesien", "SK": "Slowakei", "PL": "Polen", "LU": "Luxemburg", "SE": "Schweden", "NO": "Norwegen", "DK": "Dänemark", "FI": "Finnland", "RO": "Rumänien", "AU": "Australien", "NZ": "Neuseeland", "AR": "Argentinien", "CL": "Chile", "CO": "Kolumbien", "VN": "Vietnam", "MY": "Malaysia", "PH": "Philippinen", "KR": "Südkorea", "EE": "Estland", "LV": "Lettland", "LT": "Litauen", "RS": "Serbien", "BA": "Bosnien und Herzegowina", "AL": "Albanien", "MD": "Moldau", "MK": "Nordmazedonien" };
+const COUNTRY_TO_CONTINENT = { "DE": "Europa", "AT": "Europa", "CH": "Europa", "GB": "Europa", "FR": "Europa", "ES": "Europa", "IT": "Europa", "NL": "Europa", "CZ": "Europa", "BE": "Europa", "HU": "Europa", "BG": "Europa", "IE": "Europa", "GR": "Europa", "CY": "Europa", "MT": "Europa", "HR": "Europa", "IS": "Europa", "NO": "Europa", "SE": "Europa", "DK": "Europa", "FI": "Europa", "PL": "Europa", "RO": "Europa", "PT": "Europa", "UA": "Europa", "LU": "Europa", "SK": "Europa", "EE": "Europa", "LV": "Europa", "LT": "Europa", "RS": "Europa", "BA": "Europa", "AL": "Europa", "MD": "Europa", "MK": "Europa", "US": "Nord- & Mittelamerika", "CA": "Nord- & Mittelamerika", "MX": "Nord- & Mittelamerika", "PR": "Nord- & Mittelamerika", "BB": "Nord- & Mittelamerika", "BR": "Südamerika", "AR": "Südamerika", "CO": "Südamerika", "CL": "Südamerika", "TH": "Asien", "SG": "Asien", "IN": "Asien", "JP": "Asien", "CN": "Asien", "RU": "Asien", "ID": "Asien", "VN": "Asien", "MY": "Asien", "PH": "Asien", "KR": "Asien", "TR": "Naher Osten", "AE": "Naher Osten", "IL": "Naher Osten", "QA": "Naher Osten", "SA": "Naher Osten", "EG": "Afrika", "ZA": "Afrika", "MA": "Afrika", "AU": "Ozeanien", "NZ": "Ozeanien" };
 
 const CITY_COORDS = { "Frankfurt": [8.6821, 50.1109], "Berlin": [13.4050, 52.5200], "Munich": [11.5820, 48.1351], "Vienna": [16.3738, 48.2082], "Zürich": [8.5417, 47.3769], "Barcelona": [2.1734, 41.3851], "London": [-0.1278, 51.5074], "Paris": [2.3522, 48.8566], "Amsterdam": [4.9041, 52.3676], "Dubai": [55.2708, 25.2048], "New York": [-74.0060, 40.7128], "Washington": [-77.0369, 38.9072], "San Juan": [-66.1057, 18.4655], "Prague": [14.4378, 50.0755], "İstanbul": [28.9784, 41.0082], "Bridgetown": [-59.6167, 13.0968], "Brussels": [4.3517, 50.8503], "Milan": [9.1900, 45.4642], "Budapest": [19.0402, 47.4979], "Bilbao": [-2.9350, 43.2630], "Tel Aviv-Yafo": [34.8000, 32.0833], "Bangkok": [100.5018, 13.7563] };
 
 // Um alle in deinen Test-CSVs genannten Länder abzufangen
-const COUNTRY_CENTER_COORDS = { "US": [-95.71, 37.09], "GB": [-3.43, 55.37], "IN": [78.96, 20.59], "BR": [-51.92, -14.23], "JP": [138.25, 36.20], "CA": [-106.34, 56.13], "FR": [2.21, 46.22], "ES": [-3.74, 40.46], "DE": [10.45, 51.16], "IT": [12.56, 41.87], "CH": [8.22, 46.81], "AT": [14.55, 47.51], "NL": [5.29, 52.13], "AE": [53.84, 23.68], "HR": [15.20, 45.10], "PT": [-8.22, 39.39], "BG": [25.48, 42.73], "UA": [31.16, 48.37], "ID": [113.92, -0.78], "EG": [30.80, 26.82], "BE": [4.4699, 50.5039], "CZ": [15.4730, 49.8175], "SK": [19.6990, 48.6690], "PL": [19.1451, 51.9194], "HU": [19.5033, 47.1625], "LU": [6.1296, 49.8153], "SE": [18.0686, 59.3293], "NO": [10.7522, 59.9139], "DK": [9.5018, 56.2639], "FI": [25.7482, 61.9241], "IE": [-8.2439, 53.4129], "GR": [21.8243, 39.0742], "RO": [24.9668, 45.9432], "TR": [35.2433, 38.9637], "ZA": [22.9375, -30.5595], "AU": [133.7751, -25.2744], "NZ": [174.8860, -40.9006], "AR": [-63.6167, -38.4161], "CL": [-71.5430, -35.6751], "CO": [-74.2973, 4.5709], "MX": [-102.5528, 23.6345], "VN": [108.2772, 14.0583], "MY": [101.9758, 4.2105], "PH": [121.7740, 12.8797], "SG": [103.8198, 1.3521], "TH": [100.9925, 15.8700], "KR": [127.7669, 35.9078], "IL": [34.8516, 31.0461], "EE": [25.0136, 58.5953], "LV": [24.6032, 56.8796], "LT": [23.8813, 55.1694], "IS": [-19.0208, 64.9631], "PA": [-80.7821, 8.5380], "OM": [55.9233, 21.5126], "AG": [-61.7964, 17.0608], "SV": [-88.8965, 13.7942], "NI": [-85.2072, 12.8654], "KE": [37.9062, -0.0236], "SN": [-14.4524, 14.4974], "DZ": [1.6596, 28.0339], "LY": [17.2283, 26.3351], "DJ": [42.5903, 11.8251], "IR": [53.6880, 32.4279], "TJ": [71.2761, 38.8610], "BW": [24.6849, -22.3285], "NR": [166.9315, -0.5228], "FM": [158.1499, 7.4256], "KP": [127.5101, 40.3399], "CU": [-77.7812, 21.5218], "NG": [8.6753, 9.0820], "PG": [143.9555, -6.3150] };
+const COUNTRY_CENTER_COORDS = { "US": [-95.71, 37.09], "GB": [-3.43, 55.37], "IN": [78.96, 20.59], "BR": [-51.92, -14.23], "JP": [138.25, 36.20], "CA": [-106.34, 56.13], "FR": [2.21, 46.22], "ES": [-3.74, 40.46], "DE": [10.45, 51.16], "IT": [12.56, 41.87], "CH": [8.22, 46.81], "AT": [14.55, 47.51], "NL": [5.29, 52.13], "AE": [53.84, 23.68], "HR": [15.20, 45.10], "PT": [-8.22, 39.39], "BG": [25.48, 42.73], "UA": [31.16, 48.37], "ID": [113.92, -0.78], "EG": [30.80, 26.82], "BE": [4.4699, 50.5039], "CZ": [15.4730, 49.8175], "SK": [19.6990, 48.6690], "PL": [19.1451, 51.9194], "HU": [19.5033, 47.1625], "LU": [6.1296, 49.8153], "SE": [18.0686, 59.3293], "NO": [10.7522, 59.9139], "DK": [9.5018, 56.2639], "FI": [25.7482, 61.9241], "IE": [-8.2439, 53.4129], "GR": [21.8243, 39.0742], "RO": [24.9668, 45.9432], "TR": [35.2433, 38.9637], "ZA": [22.9375, -30.5595], "AU": [133.7751, -25.2744], "NZ": [174.8860, -40.9006], "AR": [-63.6167, -38.4161], "CL": [-71.5430, -35.6751], "CO": [-74.2973, 4.5709], "MX": [-102.5528, 23.6345], "VN": [108.2772, 14.0583], "MY": [101.9758, 4.2105], "PH": [121.7740, 12.8797], "SG": [103.8198, 1.3521], "TH": [100.9925, 15.8700], "KR": [127.7669, 35.9078], "IL": [34.8516, 31.0461], "EE": [25.0136, 58.5953], "LV": [24.6032, 56.8796], "LT": [23.8813, 55.1694], "IS": [-19.0208, 64.9631], "PA": [-80.7821, 8.5380], "OM": [55.9233, 21.5126], "AG": [-61.7964, 17.0608], "SV": [-88.8965, 13.7942], "NI": [-85.2072, 12.8654], "KE": [37.9062, -0.0236], "SN": [-14.4524, 14.4974], "DZ": [1.6596, 28.0339], "LY": [17.2283, 26.3351], "DJ": [42.5903, 11.8251], "IR": [53.6880, 32.4279], "TJ": [71.2761, 38.8610], "BW": [24.6849, -22.3285], "NR": [166.9315, -0.5228], "FM": [158.1499, 7.4256], "KP": [127.5101, 40.3399], "CU": [-77.7812, 21.5218], "NG": [8.6753, 9.0820], "PG": [143.9555, -6.3150], "RS": [21.0059, 44.0165], "BA": [17.6791, 43.9159], "AL": [20.1683, 41.1533], "MD": [28.3699, 47.4116], "MK": [21.7453, 41.6086] };
 
 const REGION_COORDS = { "England": [-1.17, 52.35], "Florida": [-81.51, 27.66], "California": [-119.41, 36.77], "Texas": [-99.90, 31.96], "Maharashtra": [75.71, 19.75], "State of São Paulo": [-48.10, -23.55], "Tokyo": [139.69, 35.68], "New York": [-75.00, 43.00], "Osaka": [135.50, 34.69], "Ontario": [-85.32, 51.25], "Tennessee": [-86.58, 35.51], "Karnataka": [75.71, 15.31], "North Carolina": [-79.01, 35.75], "Île-de-France": [2.32, 48.84], "Tamil Nadu": [78.65, 11.12], "Valencian Community": [-0.37, 39.48], "Georgia": [-82.90, 32.16], "South Carolina": [-81.16, 33.83], "Illinois": [-89.39, 40.63], "Bavaria": [11.49, 48.79], "Scotland": [-4.20, 56.49], "Nevada": [-116.41, 38.80], "Calabria": [16.28, 38.90], "Brittany": [-2.80, 48.20], "Tessin": [8.96, 46.20], "Ticino": [8.96, 46.20], "Andalusia": [-4.4203, 37.3828], "Catalonia": [1.5209, 41.5912], "Nouvelle-Aquitaine": [0.1073, 45.3333], "Occitanie": [2.1404, 43.8927], "Hawaii": [-155.5828, 19.8968], "Pennsylvania": [-77.1945, 41.2033], "Arizona": [-111.0937, 34.0489], "Guizhou": [106.7135, 26.8154], "Chelyabinsk Oblast": [61.4026, 55.1540], "Sverdlovsk Oblast": [60.5975, 56.8389], "Yaroslavl Oblast": [39.8737, 57.6261] };
 
@@ -160,10 +158,10 @@ export default function App() {
   const [adminFlightDate, setAdminFlightDate] = useState("");
   const [adminFlightCsv, setAdminFlightCsv] = useState(null);
   
-  const [adminAccDate1Start, setAdminAccDate1Start] = useState("");
-  const [adminAccDate1End, setAdminAccDate1End] = useState("");
-  const [adminAccDate2Start, setAdminAccDate2Start] = useState("");
-  const [adminAccDate2End, setAdminAccDate2End] = useState("");
+  const [adminAccDate1Start, setAdminAccDate1Start] = useState(lastWeekDates.start);
+  const [adminAccDate1End, setAdminAccDate1End] = useState(lastWeekDates.end);
+  const [adminAccDate2Start, setAdminAccDate2Start] = useState(twoWeeksAgoDates.start);
+  const [adminAccDate2End, setAdminAccDate2End] = useState(twoWeeksAgoDates.end);
   
   const [adminAccCurrCsv, setAdminAccCurrCsv] = useState(null);
   const [adminAccPrevCsv, setAdminAccPrevCsv] = useState(null);
@@ -196,28 +194,35 @@ export default function App() {
   const [accFilterType, setAccFilterType] = useState('All');
   const [availableAccCountries, setAvailableAccCountries] = useState([]);
   const [activeAccCountries, setActiveAccCountries] = useState([]);
+  const [accMinAdOppFilter, setAccMinAdOppFilter] = useState(''); 
+  
+  // Regionen-Filter State
+  const [availableAccRegions, setAvailableAccRegions] = useState([]);
+  const [activeAccRegions, setActiveAccRegions] = useState([]);
+  const [regionSearch, setRegionSearch] = useState('');
+  const [isRegionDropdownOpen, setIsRegionDropdownOpen] = useState(false);
 
   // --- TEMP USER DIY MODAL STATES ---
   const [isDiyModalOpen, setIsDiyModalOpen] = useState(false);
   const [tempFlightFile, setTempFlightFile] = useState(null);
   const [tempFlightDate, setTempFlightDate] = useState("");
   
-  const [tempAccDate1Start, setTempAccDate1Start] = useState("");
-  const [tempAccDate1End, setTempAccDate1End] = useState("");
-  const [tempAccDate2Start, setTempAccDate2Start] = useState("");
-  const [tempAccDate2End, setTempAccDate2End] = useState("");
+  const [tempAccDate1Start, setTempAccDate1Start] = useState(lastWeekDates.start);
+  const [tempAccDate1End, setTempAccDate1End] = useState(lastWeekDates.end);
+  const [tempAccDate2Start, setTempAccDate2Start] = useState(twoWeeksAgoDates.start);
+  const [tempAccDate2End, setTempAccDate2End] = useState(twoWeeksAgoDates.end);
   
   const [tempAccCurrent, setTempAccCurrent] = useState(null);
   const [tempAccPrevious, setTempAccPrevious] = useState(null);
 
   const chartRef = useRef(null);
   const chartInstance = useRef(null);
+  const dropdownRef = useRef(null);
 
   // ==========================================
   // 1. INIT & AUTH (FIREBASE + ECHARTS)
   // ==========================================
   useEffect(() => {
-    // ECharts laden
     if (!document.getElementById('echarts-core')) {
       const script = document.createElement('script');
       script.id = 'echarts-core';
@@ -234,7 +239,6 @@ export default function App() {
       setEchartsReady(true);
     }
 
-    // Firebase Auth anstoßen
     if (isFirebaseReady) {
       const initAuth = async () => {
         try {
@@ -250,13 +254,23 @@ export default function App() {
       const unsubscribe = onAuthStateChanged(auth, (u) => setUser(u));
       return () => unsubscribe();
     } else {
-      // Offline / Kein Firebase Fallback laden
       setFlightsGlobalCsv(DEFAULT_FLIGHTS_CSV);
       setFlightsGlobalDate("Demo Daten (Offline)");
       setAccGlobalCurrCsv(DEFAULT_ACC_CURRENT_CSV);
       setAccGlobalPrevCsv(DEFAULT_ACC_PREVIOUS_CSV);
       setAccGlobalDate("Demo Daten (Offline)");
     }
+  }, []);
+
+  // Schließt das Dropdown, wenn man außerhalb klickt
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsRegionDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   // ==========================================
@@ -296,7 +310,7 @@ export default function App() {
 
 
   // ==========================================
-  // 3. PARSING & UPDATE LOGIK
+  // 3. PARSING & UPDATE LOGIK (MIT AUTO-FILTER)
   // ==========================================
   const parseCSV = (csvText) => {
     if(!csvText) return [];
@@ -315,14 +329,17 @@ export default function App() {
       const destCountry = destFull.includes('-') ? destFull.split('-')[0].trim() : 'Unbekannt';
       const destCity = destFull.includes('-') ? destFull.split('-')[1].trim() : destFull;
       
-      // NEU: Intelligentes Koordinaten-Fallback
-      // 1. Suche nach Stadt. 2. Wenn nicht gefunden, nimm Landesmitte. 3. Wenn Land unbekannt, berechne Dummy-Location.
+      // AUTO-FILTER: Nur EU + US/CA als Ursprung & nur EU als Ziel zulassen
+      const isOriginValid = ['US', 'CA'].includes(originCountry) || COUNTRY_TO_CONTINENT[originCountry] === 'Europa';
+      const isDestValid = COUNTRY_TO_CONTINENT[destCountry] === 'Europa';
+      if (!isOriginValid || !isDestValid) continue;
+
       const oCoord = CITY_COORDS[originCity] || COUNTRY_CENTER_COORDS[originCountry] || getFallbackCoord(originCity);
       const dCoord = CITY_COORDS[destCity] || COUNTRY_CENTER_COORDS[destCountry] || getFallbackCoord(destCity);
 
       parsedData.push({ 
         originCountry, originCity, destCountry, destCity, 
-        oCoord, dCoord, // Gesicherte Koordinaten speichern
+        oCoord, dCoord, 
         routeId: cols[2], 
         d84_ad: parseFloat(cols[3]) || 0, d84_yoy: parseFloat(cols[4]) || 0, 
         d28_ad: parseFloat(cols[5]) || 0, d28_mom: parseFloat(cols[6]) || 0, d28_yoy: parseFloat(cols[7]) || 0, 
@@ -342,7 +359,16 @@ export default function App() {
        if(!line) continue;
        const cols = line.split(delimiter);
        if(cols.length >= 5) {
-           parsed.push({ userCountry: cols[0].trim(), destCountry: cols[1].trim(), destRegion: cols[2].trim(), type: cols[3].trim(), adOpp: parseFloat(cols[4]) || 0 });
+           const userCountry = cols[0].trim();
+           const destCountry = cols[1].trim();
+           const destRegion = cols[2].trim();
+           
+           // AUTO-FILTER: Nur EU + US/CA als Ursprung & nur EU als Ziel zulassen
+           const isOriginValid = ['US', 'CA'].includes(userCountry) || COUNTRY_TO_CONTINENT[userCountry] === 'Europa';
+           const isDestValid = COUNTRY_TO_CONTINENT[destCountry] === 'Europa';
+           if (!isOriginValid || !isDestValid) continue;
+
+           parsed.push({ userCountry, destCountry, destRegion, type: cols[3].trim(), adOpp: parseFloat(cols[4]) || 0 });
        }
     }
     return parsed;
@@ -351,7 +377,6 @@ export default function App() {
   const mergeAccData = (currArray, prevArray) => {
     const joined = [];
     currArray.forEach(curr => {
-       // ACHTUNG: Der Rauschfilter (<1000) wurde hier absichtlich entfernt, damit das Tool keine gültigen kleinen Daten verschluckt!
        const prev = prevArray.find(p => p.userCountry === curr.userCountry && p.destCountry === curr.destCountry && p.destRegion === curr.destRegion);
        const prevAdOpp = prev ? prev.adOpp : 0;
        let wow = 0;
@@ -363,14 +388,16 @@ export default function App() {
     return joined;
   };
 
-  // Extrahiert verfügbare Länder, sobald sich die Unterkunfts-Daten ändern
   useEffect(() => {
     const countries = [...new Set(accData.map(d => d.userCountry))].sort();
     setAvailableAccCountries(countries);
     setActiveAccCountries(countries);
+
+    const regions = [...new Set(accData.map(d => d.destRegion))].filter(Boolean).sort();
+    setAvailableAccRegions(regions);
+    setActiveAccRegions(regions);
   }, [accData]);
 
-  // Wenn Global-Daten aktualisiert werden, neu laden
   useEffect(() => {
     if (isDefaultDataFlights && flightsGlobalCsv) {
       const parsed = parseCSV(flightsGlobalCsv);
@@ -378,10 +405,10 @@ export default function App() {
       setDisabledRoutes([]);
       const countries = [...new Set(parsed.map(d => d.originCountry))].sort();
       setAvailableCountries(countries);
-      setActiveCountries(countries); // Alle auswählen
+      setActiveCountries(countries);
       const destCountries = [...new Set(parsed.map(d => d.destCountry))].sort();
       setAvailableDestCountries(destCountries);
-      setActiveDestCountries(destCountries); // Alle auswählen
+      setActiveDestCountries(destCountries);
     }
   }, [flightsGlobalCsv, isDefaultDataFlights]);
 
@@ -398,7 +425,7 @@ export default function App() {
 
 
   // ==========================================
-  // 4. ADMIN SPEICHERN (FIREBASE WRITE)
+  // 4. ADMIN & DIY SPEICHERN
   // ==========================================
   const handleAdminSaveFlights = async () => {
     if (!user || !isFirebaseReady || !appId) return alert("Firebase nicht verbunden!");
@@ -439,7 +466,6 @@ export default function App() {
     setIsSaving(false);
   };
 
-  // --- USER DIY MODAL HANDLER ---
   const applyCustomFlights = async () => {
     if(!tempFlightFile) return;
     const text = await tempFlightFile.text();
@@ -447,7 +473,6 @@ export default function App() {
     setCustomFlightDate(formatD(tempFlightDate) || "Manuelles Datum");
     const parsed = parseCSV(text);
     setData(parsed);
-    // UI Update Filter...
     const countries = [...new Set(parsed.map(d => d.originCountry))].sort();
     setAvailableCountries(countries);
     setActiveCountries(countries);
@@ -491,7 +516,7 @@ export default function App() {
     return groups;
   }, [availableDestCountries]);
 
-  const maxPossibleAdOpp = useMemo(() => {
+  const maxPossibleAdOppFlights = useMemo(() => {
     if (data.length === 0) return 100000;
     let max = 0;
     data.forEach(d => {
@@ -501,6 +526,13 @@ export default function App() {
     return max > 0 ? Math.ceil(max / 10000) * 10000 : 100000;
   }, [data, timeframe]);
 
+  const maxPossibleAdOppAcc = useMemo(() => {
+    if (accData.length === 0) return 100000;
+    let max = 0;
+    accData.forEach(d => { if (d.adOpp > max) max = d.adOpp; });
+    return max > 0 ? Math.ceil(max / 10000) * 10000 : 100000;
+  }, [accData]);
+
   const getTrendColor = (trend) => {
     if (trend <= -0.20) return '#dc2626'; 
     if (trend < 0) return '#fca5a5';      
@@ -508,6 +540,8 @@ export default function App() {
     if (trend <= 0.20) return '#6ee7b7';  
     return '#10b981';                     
   };
+
+  const filteredRegionsForSearch = availableAccRegions.filter(r => r.toLowerCase().includes(regionSearch.toLowerCase()));
 
   // --- ECHARTS RENDERING ---
   useEffect(() => {
@@ -517,9 +551,9 @@ export default function App() {
     let option = {};
 
     if (activeTab === 'flights' && data.length > 0) {
+      const activeMinAdOpp = Number(minAdOppFilter) || 0;
       const activeDataRaw = data.filter(r => !disabledRoutes.includes(r.routeId) && activeCountries.includes(r.originCountry) && activeDestCountries.includes(r.destCountry));
       let minAd = Infinity, maxAd = -Infinity;
-      const activeMinAdOpp = Number(minAdOppFilter) || 0;
 
       const currentData = activeDataRaw.map(row => {
         let adOpp, trend, trendLabel;
@@ -535,7 +569,6 @@ export default function App() {
 
       const lineData = currentData.map(row => {
         const width = (maxAd > minAd) ? (1.5 + 3.5 * ((row.currentAdOpp - minAd) / (maxAd - minAd))) : 3;
-        // Benutzt jetzt die sicher abgeleiteten Koordinaten!
         return { coords: [row.oCoord, row.dCoord], lineStyle: { width: width, color: getTrendColor(row.currentTrend), curveness: 0.2 }, details: row };
       });
 
@@ -570,9 +603,13 @@ export default function App() {
 
     } else if (activeTab === 'accommodations' && accData.length > 0) {
       // 🛏️ ACCOMMODATIONS
+      const activeMinAdOpp = Number(accMinAdOppFilter) || 0;
+      
       const filteredData = accData.filter(r => 
         (accFilterType === 'All' || r.type === accFilterType) &&
-        activeAccCountries.includes(r.userCountry)
+        activeAccCountries.includes(r.userCountry) &&
+        activeAccRegions.includes(r.destRegion) &&
+        r.adOpp >= activeMinAdOpp
       );
       
       let minAd = Infinity, maxAd = -Infinity;
@@ -584,7 +621,6 @@ export default function App() {
       const regionAgg = {};
 
       filteredData.forEach(row => {
-        // Fallback Logik nutzen, damit das Array nie mit [0,0] abstürzt!
         const originCoord = COUNTRY_CENTER_COORDS[row.userCountry] || getFallbackCoord(row.userCountry);
         const destCoord = REGION_COORDS[row.destRegion] || COUNTRY_CENTER_COORDS[row.destCountry] || getFallbackCoord(row.destRegion || row.destCountry);
         
@@ -649,12 +685,16 @@ export default function App() {
     const handleResize = () => chartInstance.current?.resize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [data, timeframe, trendType, echartsReady, disabledRoutes, activeCountries, activeDestCountries, minAdOppFilter, activeTab, accData, accFilterType, activeAccCountries]);
+  }, [data, timeframe, trendType, echartsReady, disabledRoutes, activeCountries, activeDestCountries, minAdOppFilter, activeTab, accData, accFilterType, activeAccCountries, activeAccRegions, accMinAdOppFilter]);
 
   const toggleDisabledRoute = (routeId) => setDisabledRoutes(prev => prev.filter(id => id !== routeId));
   const toggleCountry = (country) => setActiveCountries(prev => prev.includes(country) ? prev.filter(c => c !== country) : [...prev, country]);
   const toggleDestCountry = (country) => setActiveDestCountries(prev => prev.includes(country) ? prev.filter(c => c !== country) : [...prev, country]);
+  
+  // Handlers für Unterkünfte
   const toggleAccCountry = (country) => setActiveAccCountries(prev => prev.includes(country) ? prev.filter(c => c !== country) : [...prev, country]);
+  const toggleAccRegion = (region) => setActiveAccRegions(prev => prev.includes(region) ? prev.filter(r => r !== region) : [...prev, region]);
+  
   const setContinentAll = (countriesInContinent) => setActiveDestCountries(prev => { const newSet = new Set(prev); countriesInContinent.forEach(c => newSet.add(c)); return Array.from(newSet); });
   const setContinentNone = (countriesInContinent) => setActiveDestCountries(prev => prev.filter(c => !countriesInContinent.includes(c)));
 
@@ -662,10 +702,9 @@ export default function App() {
     <div className="flex h-screen bg-slate-900 text-slate-200 font-sans relative overflow-hidden">
       
       {/* SIDEBAR */}
-      <div className="w-80 bg-slate-800 border-r border-slate-700 flex flex-col z-10 shadow-xl">
+      <div className="w-80 bg-slate-800 border-r border-slate-700 flex flex-col z-10 shadow-xl relative">
         <div className="p-6 flex-1 overflow-y-auto custom-scrollbar">
           
-          {/* LOGO: NEUER GEHEIMER ADMIN-ZUGANG (Doppelklick) */}
           <div 
             className="flex items-center gap-3 mb-4 cursor-pointer select-none group" 
             onDoubleClick={() => setIsAdminPanelOpen(true)}
@@ -675,7 +714,6 @@ export default function App() {
             <h1 className="text-xl font-bold text-white leading-tight">TAC<br/><span className="text-sm font-normal text-slate-400">Travel Trends</span></h1>
           </div>
 
-          {/* HERAUSGESTELLTES DATUM (STICHTAG / ZEITRAUM) */}
           <div className="bg-slate-900/60 border border-slate-700 rounded-lg p-3 mb-6 relative overflow-hidden">
             <div className={`absolute top-0 left-0 w-1 h-full rounded-l-lg ${!isFirebaseReady ? 'bg-red-500' : 'bg-blue-500'}`}></div>
             <div className="flex justify-between items-start pl-2">
@@ -696,10 +734,9 @@ export default function App() {
                 </button>
               )}
             </div>
-            {!isFirebaseReady && <p className="text-[9px] text-red-400 mt-2 pl-2">Datenbank (Firebase) offline/nicht konfiguriert. Prüfe Vercel Env Vars.</p>}
+            {!isFirebaseReady && <p className="text-[9px] text-red-400 mt-2 pl-2">Datenbank offline/nicht konfiguriert. Prüfe Vercel Env Vars.</p>}
           </div>
 
-          {/* TAB-STEUERUNG */}
           <div className="flex bg-slate-900 rounded-lg p-1 mb-6 border border-slate-700">
             <button onClick={() => setActiveTab('flights')} className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'flights' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>
               <span>✈️</span> Flüge
@@ -722,9 +759,9 @@ export default function App() {
                       <button onClick={() => setActiveCountries([])} className="text-[10px] text-slate-400 hover:text-slate-300 transition-colors">Keines</button>
                     </div>
                   </div>
-                  <div className="grid grid-cols-5 gap-1.5">
+                  <div className="flex flex-wrap gap-1.5">
                     {availableCountries.map(country => (
-                      <button key={country} onClick={() => toggleCountry(country)} title={COUNTRY_NAMES[country] || country} className={`w-full flex justify-center items-center py-1.5 rounded transition-colors border ${activeCountries.includes(country) ? 'bg-blue-600/20 border-blue-500 opacity-100' : 'bg-slate-800 border-slate-700 hover:bg-slate-700 opacity-50 grayscale'}`}>
+                      <button key={country} onClick={() => toggleCountry(country)} title={COUNTRY_NAMES[country] || country} className={`flex justify-center items-center p-1.5 rounded transition-colors border ${activeCountries.includes(country) ? 'bg-blue-600/20 border-blue-500 opacity-100' : 'bg-slate-800 border-slate-700 hover:bg-slate-700 opacity-50 grayscale'}`}>
                         <img src={`https://flagcdn.com/w40/${country.toLowerCase()}.png`} alt={country} className="w-6 rounded-sm shadow-sm" />
                       </button>
                     ))}
@@ -750,11 +787,11 @@ export default function App() {
                               <button onClick={() => setContinentNone(destByContinent[continent])} className="text-[10px] text-slate-400 hover:text-slate-300 transition-colors">Keines</button>
                             </div>
                           </div>
-                          <div className="grid grid-cols-5 gap-1.5">
+                          <div className="flex flex-wrap gap-1.5">
                             {destByContinent[continent].map(country => {
                               const isValid = validDestCountries.includes(country); 
                               return (
-                                <button key={`dest-${country}`} onClick={() => isValid && toggleDestCountry(country)} title={!isValid ? `${COUNTRY_NAMES[country] || country} (Keine Routen)` : (COUNTRY_NAMES[country] || country)} className={`w-full flex justify-center items-center py-1.5 rounded transition-colors border ${!isValid ? 'opacity-10 cursor-not-allowed bg-slate-900 border-slate-800 grayscale' : activeDestCountries.includes(country) ? 'bg-emerald-600/20 border-emerald-500 opacity-100' : 'bg-slate-800 border-slate-700 hover:bg-slate-700 opacity-50 grayscale'}`}>
+                                <button key={`dest-${country}`} onClick={() => isValid && toggleDestCountry(country)} title={!isValid ? `${COUNTRY_NAMES[country] || country} (Keine Routen)` : (COUNTRY_NAMES[country] || country)} className={`flex justify-center items-center p-1.5 rounded transition-colors border ${!isValid ? 'opacity-10 cursor-not-allowed bg-slate-900 border-slate-800 grayscale' : activeDestCountries.includes(country) ? 'bg-emerald-600/20 border-emerald-500 opacity-100' : 'bg-slate-800 border-slate-700 hover:bg-slate-700 opacity-50 grayscale'}`}>
                                   <img src={`https://flagcdn.com/w40/${country.toLowerCase()}.png`} alt={country} className="w-6 rounded-sm shadow-sm" />
                                 </button>
                               );
@@ -769,12 +806,10 @@ export default function App() {
 
               <div className="mb-6 p-4 bg-slate-800/80 rounded-lg border border-slate-700 shadow-inner">
                 <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2"><SlidersHorizontal className="w-4 h-4" /> Min. Interesse</h2>
-                <div className="flex items-center gap-2 mb-3">
+                <div className="flex flex-col gap-3">
                   <input type="number" min="0" value={minAdOppFilter} onChange={(e) => setMinAdOppFilter(e.target.value === '' ? '' : parseInt(e.target.value, 10).toString())} className="w-full bg-slate-900 border border-slate-600 text-slate-200 text-sm rounded px-3 py-1.5 focus:outline-none focus:border-blue-500 transition-colors" placeholder="Exakter Wert..." />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <input type="range" min="0" max={maxPossibleAdOpp} step="5000" value={minAdOppFilter === '' ? 0 : minAdOppFilter} onChange={(e) => setMinAdOppFilter(e.target.value)} className="w-full h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-blue-500" />
-                  <div className="flex justify-between items-center text-[10px] text-slate-500 mt-1"><span>0</span><span>Max: {maxPossibleAdOpp.toLocaleString('de-DE')}</span></div>
+                  <input type="range" min="0" max={maxPossibleAdOppFlights} step="5000" value={minAdOppFilter === '' ? 0 : minAdOppFilter} onChange={(e) => setMinAdOppFilter(e.target.value)} className="w-full h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-blue-500" />
+                  <div className="flex justify-between items-center text-[10px] text-slate-500"><span>0</span><span>Max: {maxPossibleAdOppFlights.toLocaleString('de-DE')}</span></div>
                 </div>
               </div>
 
@@ -813,6 +848,7 @@ export default function App() {
           {/* FILTER BEREICH (UNTERKÜNFTE) */}
           {activeTab === 'accommodations' && accData.length > 0 && (
             <>
+              {/* Ursprungsland im dynamischen Flex-Design */}
               {availableAccCountries.length > 0 && (
                 <div className="mb-6">
                   <div className="flex justify-between items-end mb-2">
@@ -823,15 +859,77 @@ export default function App() {
                       <button onClick={() => setActiveAccCountries([])} className="text-[10px] text-slate-400 hover:text-slate-300 transition-colors">Keines</button>
                     </div>
                   </div>
-                  <div className="grid grid-cols-5 gap-1.5">
+                  <div className="flex flex-wrap gap-1.5">
                     {availableAccCountries.map(country => (
-                      <button key={country} onClick={() => toggleAccCountry(country)} title={COUNTRY_NAMES[country] || country} className={`w-full flex justify-center items-center py-1.5 rounded transition-colors border ${activeAccCountries.includes(country) ? 'bg-indigo-600/20 border-indigo-500 opacity-100' : 'bg-slate-800 border-slate-700 hover:bg-slate-700 opacity-50 grayscale'}`}>
+                      <button key={country} onClick={() => toggleAccCountry(country)} title={COUNTRY_NAMES[country] || country} className={`flex justify-center items-center p-1.5 rounded transition-colors border ${activeAccCountries.includes(country) ? 'bg-indigo-600/20 border-indigo-500 opacity-100' : 'bg-slate-800 border-slate-700 hover:bg-slate-700 opacity-50 grayscale'}`}>
                         <img src={`https://flagcdn.com/w40/${country.toLowerCase()}.png`} alt={country} className="w-6 rounded-sm shadow-sm" />
                       </button>
                     ))}
                   </div>
                 </div>
               )}
+
+              {/* Regionen-Such-Dropdown */}
+              {availableAccRegions.length > 0 && (
+                <div className="mb-6 relative" ref={dropdownRef}>
+                  <div className="flex justify-between items-end mb-2">
+                    <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2"><MapIcon className="w-4 h-4" /> Zielregion</h2>
+                    <span className="text-[10px] text-slate-500">{activeAccRegions.length} aktiv</span>
+                  </div>
+                  
+                  <button 
+                    onClick={() => setIsRegionDropdownOpen(!isRegionDropdownOpen)} 
+                    className="w-full flex items-center justify-between bg-slate-900 border border-slate-600 hover:border-indigo-500 text-slate-200 text-sm rounded px-3 py-2 transition-colors"
+                  >
+                    <span className="truncate pr-2">{activeAccRegions.length === availableAccRegions.length ? "Alle Regionen ausgewählt" : `${activeAccRegions.length} Regionen ausgewählt`}</span>
+                    {isRegionDropdownOpen ? <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" /> : <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />}
+                  </button>
+
+                  {isRegionDropdownOpen && (
+                    <div className="absolute top-full left-0 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-xl z-50 max-h-72 flex flex-col overflow-hidden">
+                      <div className="p-2 border-b border-slate-700 bg-slate-800/90 relative">
+                        <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                        <input 
+                          type="text" 
+                          placeholder="Suchen..." 
+                          value={regionSearch} 
+                          onChange={(e) => setRegionSearch(e.target.value)} 
+                          className="w-full bg-slate-900 text-slate-200 text-sm rounded pl-8 pr-3 py-1.5 focus:outline-none focus:border-indigo-500 border border-slate-700" 
+                        />
+                      </div>
+                      <div className="flex gap-2 p-2 border-b border-slate-700 bg-slate-900/50">
+                        <button onClick={() => setActiveAccRegions([...availableAccRegions])} className="text-xs text-indigo-400 hover:text-indigo-300 font-medium px-2">Alle anwählen</button>
+                        <span className="text-xs text-slate-600">|</span>
+                        <button onClick={() => setActiveAccRegions([])} className="text-xs text-slate-400 hover:text-slate-300 px-2">Alle abwählen</button>
+                      </div>
+                      <div className="overflow-y-auto p-2 flex-1 custom-scrollbar">
+                        {filteredRegionsForSearch.length === 0 ? (
+                          <div className="text-xs text-slate-500 text-center py-4">Keine Region gefunden</div>
+                        ) : (
+                          filteredRegionsForSearch.map(region => (
+                            <label key={region} className="flex items-center gap-3 p-1.5 hover:bg-slate-700 rounded cursor-pointer group">
+                              <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${activeAccRegions.includes(region) ? 'bg-indigo-600 border-indigo-600' : 'bg-slate-900 border-slate-600 group-hover:border-indigo-500'}`}>
+                                {activeAccRegions.includes(region) && <CheckCircle className="w-3 h-3 text-white" />}
+                              </div>
+                              <span className={`text-sm truncate ${activeAccRegions.includes(region) ? 'text-slate-200' : 'text-slate-400'}`}>{region}</span>
+                            </label>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Slider für Unterkünfte */}
+              <div className="mb-6 p-4 bg-slate-800/80 rounded-lg border border-slate-700 shadow-inner">
+                <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2"><SlidersHorizontal className="w-4 h-4" /> Min. Interesse</h2>
+                <div className="flex flex-col gap-3">
+                  <input type="number" min="0" value={accMinAdOppFilter} onChange={(e) => setAccMinAdOppFilter(e.target.value === '' ? '' : parseInt(e.target.value, 10).toString())} className="w-full bg-slate-900 border border-slate-600 text-slate-200 text-sm rounded px-3 py-1.5 focus:outline-none focus:border-indigo-500 transition-colors" placeholder="Exakter Wert..." />
+                  <input type="range" min="0" max={maxPossibleAdOppAcc} step="5000" value={accMinAdOppFilter === '' ? 0 : accMinAdOppFilter} onChange={(e) => setAccMinAdOppFilter(e.target.value)} className="w-full h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-indigo-500" />
+                  <div className="flex justify-between items-center text-[10px] text-slate-500"><span>0</span><span>Max: {maxPossibleAdOppAcc.toLocaleString('de-DE')}</span></div>
+                </div>
+              </div>
 
               <div className="mb-6">
                 <div className="flex justify-between items-end mb-2">
@@ -848,7 +946,7 @@ export default function App() {
               
               <div className="text-center p-3 bg-emerald-900/20 border border-emerald-800/50 rounded-lg mb-6">
                 <p className="text-sm text-emerald-400 font-semibold">
-                  {accData.filter(r => (accFilterType === 'All' || r.type === accFilterType) && activeAccCountries.includes(r.userCountry)).length} Routen berechnet
+                  {accData.filter(r => (accFilterType === 'All' || r.type === accFilterType) && activeAccCountries.includes(r.userCountry) && activeAccRegions.includes(r.destRegion)).length} Routen berechnet
                 </p>
                 <p className="text-xs text-slate-400 mt-1">Gehe mit der Maus über die pulsierenden Regionen, um Details zu sehen.</p>
               </div>
@@ -890,7 +988,7 @@ export default function App() {
               title="Pro Workspace (DIY Analytics)"
             />
           </div>
-          <span className="text-[10px] text-slate-600">v1.4</span>
+          <span className="text-[10px] text-slate-600">v1.5</span>
         </div>
       </div>
 
