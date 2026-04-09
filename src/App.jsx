@@ -135,7 +135,65 @@ const getFlagImgHtml = (countryCode) => {
 const COUNTRY_NAMES = { "DE": "Deutschland", "AT": "Österreich", "CH": "Schweiz", "US": "USA", "GB": "Großbritannien", "FR": "Frankreich", "ES": "Spanien", "IT": "Italien", "NL": "Niederlande", "TR": "Türkei", "AE": "Ver. Arab. Emirate", "TH": "Thailand", "SG": "Singapur", "CZ": "Tschechien", "PR": "Puerto Rico", "BB": "Barbados", "BE": "Belgien", "HU": "Ungarn", "IL": "Israel", "CA": "Kanada", "BG": "Bulgarien", "IE": "Irland", "MX": "Mexiko", "VE": "Venezuela", "MA": "Marokko", "IN": "Indien", "DZ": "Algerien", "EG": "Ägypten", "ZA": "Südafrika", "GR": "Griechenland", "CY": "Zypern", "HR": "Kroatien", "PT": "Portugal", "JP": "Japan", "BR": "Brasilien", "CN": "China", "RU": "Russland", "UA": "Ukraine", "ID": "Indonesien", "SK": "Slowakei", "PL": "Polen", "LU": "Luxemburg", "SE": "Schweden", "NO": "Norwegen", "DK": "Dänemark", "FI": "Finnland", "RO": "Rumänien", "AU": "Australien", "NZ": "Neuseeland", "AR": "Argentinien", "CL": "Chile", "CO": "Kolumbien", "VN": "Vietnam", "MY": "Malaysia", "PH": "Philippinen", "KR": "Südkorea", "EE": "Estland", "LV": "Lettland", "LT": "Litauen", "RS": "Serbien", "BA": "Bosnien und Herzegowina", "AL": "Albanien", "MD": "Moldau", "MK": "Nordmazedonien" };
 const COUNTRY_TO_CONTINENT = { "DE": "Europa", "AT": "Europa", "CH": "Europa", "GB": "Europa", "FR": "Europa", "ES": "Europa", "IT": "Europa", "NL": "Europa", "CZ": "Europa", "BE": "Europa", "HU": "Europa", "BG": "Europa", "IE": "Europa", "GR": "Europa", "CY": "Europa", "MT": "Europa", "HR": "Europa", "IS": "Europa", "NO": "Europa", "SE": "Europa", "DK": "Europa", "FI": "Europa", "PL": "Europa", "RO": "Europa", "PT": "Europa", "UA": "Europa", "LU": "Europa", "SK": "Europa", "EE": "Europa", "LV": "Europa", "LT": "Europa", "RS": "Europa", "BA": "Europa", "AL": "Europa", "MD": "Europa", "MK": "Europa", "US": "Nord- & Mittelamerika", "CA": "Nord- & Mittelamerika", "MX": "Nord- & Mittelamerika", "PR": "Nord- & Mittelamerika", "BB": "Nord- & Mittelamerika", "BR": "Südamerika", "AR": "Südamerika", "CO": "Südamerika", "CL": "Südamerika", "TH": "Asien", "SG": "Asien", "IN": "Asien", "JP": "Asien", "CN": "Asien", "RU": "Asien", "ID": "Asien", "VN": "Asien", "MY": "Asien", "PH": "Asien", "KR": "Asien", "TR": "Naher Osten", "AE": "Naher Osten", "IL": "Naher Osten", "QA": "Naher Osten", "SA": "Naher Osten", "EG": "Afrika", "ZA": "Afrika", "MA": "Afrika", "AU": "Ozeanien", "NZ": "Ozeanien" };
 
-const CITY_COORDS = { "Frankfurt": [8.6821, 50.1109], "Berlin": [13.4050, 52.5200], "Munich": [11.5820, 48.1351], "Vienna": [16.3738, 48.2082], "Zürich": [8.5417, 47.3769], "Barcelona": [2.1734, 41.3851], "London": [-0.1278, 51.5074], "Paris": [2.3522, 48.8566], "Amsterdam": [4.9041, 52.3676], "Dubai": [55.2708, 25.2048], "New York": [-74.0060, 40.7128], "Washington": [-77.0369, 38.9072], "San Juan": [-66.1057, 18.4655], "Prague": [14.4378, 50.0755], "İstanbul": [28.9784, 41.0082], "Bridgetown": [-59.6167, 13.0968], "Brussels": [4.3517, 50.8503], "Milan": [9.1900, 45.4642], "Budapest": [19.0402, 47.4979], "Bilbao": [-2.9350, 43.2630], "Tel Aviv-Yafo": [34.8000, 32.0833], "Bangkok": [100.5018, 13.7563] };
+const CITY_COORDS = { 
+  // Ursprüngliche Städte
+  "Frankfurt": [8.6821, 50.1109], "Berlin": [13.4050, 52.5200], "Munich": [11.5820, 48.1351], 
+  "Vienna": [16.3738, 48.2082], "Zürich": [8.5417, 47.3769], "Barcelona": [2.1734, 41.3851], 
+  "London": [-0.1278, 51.5074], "Paris": [2.3522, 48.8566], "Amsterdam": [4.9041, 52.3676], 
+  "Dubai": [55.2708, 25.2048], "New York": [-74.0060, 40.7128], "Washington": [-77.0369, 38.9072], 
+  "San Juan": [-66.1057, 18.4655], "Prague": [14.4378, 50.0755], "İstanbul": [28.9784, 41.0082], 
+  "Bridgetown": [-59.6167, 13.0968], "Brussels": [4.3517, 50.8503], "Milan": [9.1900, 45.4642], 
+  "Budapest": [19.0402, 47.4979], "Bilbao": [-2.9350, 43.2630], "Tel Aviv-Yafo": [34.8000, 32.0833], 
+  "Bangkok": [100.5018, 13.7563],
+  // NEU: Massives Update für Europa & US/Welt Hubs
+  "Palma de Mallorca": [2.6502, 39.5696], "Madrid": [-3.7038, 40.4168], "Lisbon": [-9.1393, 38.7223],
+  "Rome": [12.4964, 41.9028], "Dublin": [-6.2603, 53.3498], "Athens": [23.7275, 37.9838],
+  "Copenhagen": [12.5683, 55.6761], "Oslo": [10.7522, 59.9139], "Stockholm": [18.0686, 59.3293],
+  "Helsinki": [24.9384, 60.1695], "Warsaw": [21.0122, 52.2297], "Reykjavik": [-21.8277, 64.1283],
+  "Geneva": [6.1432, 46.2044], "Hamburg": [9.9937, 53.5511], "Düsseldorf": [6.7735, 51.2277],
+  "Stuttgart": [9.1829, 48.7758], "Cologne": [6.9528, 50.9364], "Miami": [-80.1918, 25.7617],
+  "Los Angeles": [-118.2437, 34.0522], "San Francisco": [-122.4194, 37.7749], "Chicago": [-87.6298, 41.8781],
+  "Boston": [-71.0589, 42.3601], "Las Vegas": [-115.1398, 36.1699], "Orlando": [-81.3792, 28.5383],
+  "Seattle": [-122.3321, 47.6062], "Atlanta": [-84.3880, 33.7490], "Toronto": [-79.3832, 43.6532],
+  "Montreal": [-73.5673, 45.5017], "Vancouver": [-123.1207, 49.2827], "Cancun": [-86.8515, 21.1619],
+  "Cancún": [-86.8515, 21.1619], "Tenerife": [-16.2518, 28.2916], "Gran Canaria": [-15.5474, 27.9202],
+  "Ibiza": [1.4330, 38.9067], "Faro": [-7.9304, 37.0194], "Madeira": [-16.9081, 32.6496],
+  "Antalya": [30.7133, 36.8969], "Málaga": [-4.4203, 36.7213], "Malaga": [-4.4203, 36.7213],
+  "Alicante": [-0.4815, 38.3452], "Valencia": [-0.3763, 39.4699], "Naples": [14.2681, 40.8518],
+  "Venice": [12.3155, 45.4408], "Porto": [-8.6291, 41.1579], "Edinburgh": [-3.1883, 55.9533],
+  "Manchester": [-2.2426, 53.4808], "Birmingham": [-1.8904, 52.4862], "Glasgow": [-4.2518, 55.8642],
+  "Belfast": [-5.9301, 54.5973], "Catania": [15.0873, 37.5079], "Palermo": [13.3613, 38.1157],
+  "Bucharest": [26.1025, 44.4268], "Sofia": [23.3219, 42.6977], "Belgrade": [20.4489, 44.8125],
+  "Zagreb": [15.9819, 45.8150], "Split": [16.4402, 43.5081], "Dubrovnik": [18.0944, 42.6507],
+  "Krakow": [19.9450, 50.0647], "Kraków": [19.9450, 50.0647], "Riga": [24.1052, 56.9496],
+  "Tallinn": [24.7536, 59.4370], "Vilnius": [25.2797, 54.6872], "Larnaca": [33.6292, 34.9153],
+  "Paphos": [32.4245, 34.7720], "Valletta": [14.5146, 35.8989], "Luqa": [14.4898, 35.8590],
+  "Rhodes": [28.2225, 36.4341], "Heraklion": [25.1320, 35.3288], "Corfu": [19.9197, 39.6243],
+  "Thessaloniki": [22.9444, 40.6401], "Pristina": [21.1655, 42.6629], "Tirana": [19.8189, 41.3275],
+  "Sarajevo": [18.4131, 43.8563], "Ljubljana": [14.5058, 46.0569], "Bratislava": [17.1077, 48.1486],
+  "Nice": [7.2620, 43.7102], "Lyon": [4.8357, 45.7640], "Marseille": [5.3698, 43.2965],
+  "Toulouse": [1.4442, 43.6047], "Bordeaux": [-0.5792, 44.8378], "Nantes": [-1.5536, 47.2184],
+  "Strasbourg": [7.7521, 48.5734], "Lille": [3.0573, 50.6292], "Bologna": [11.3426, 44.4949],
+  "Florence": [11.2558, 43.7696], "Genoa": [8.9463, 44.4056], "Turin": [7.6869, 45.0703],
+  "Pisa": [11.2558, 43.7167], "Verona": [12.3155, 45.4384], "Seville": [-5.9845, 37.3891],
+  "Zaragoza": [-0.8810, 41.6488], "Reykjavík": [-21.8277, 64.1283], "Girona": [1.2546, 41.9794],
+  "Menorca": [4.0204, 39.9496], "Lanzarote": [-15.5474, 27.9202], "Fuerteventura": [-14.0116, 28.3587],
+  "Ibiza City": [1.4330, 38.9067], "Chania": [25.0203, 35.5138], "Kefalonia": [19.9197, 39.6243],
+  "Santorini": [28.2225, 36.4341], "Mykonos": [25.3289, 36.4408], "Zakynthos": [20.8833, 37.7833],
+  "Bodrum": [27.4296, 37.0344], "Dalaman": [30.7133, 36.7648], "Izmir": [27.1428, 38.4237],
+  "Ankara": [32.8597, 39.9334], "Bremen": [8.8017, 53.0793], "Hanover": [9.7320, 52.3705],
+  "Leipzig": [12.3731, 51.3397], "Dresden": [13.7373, 51.0504], "Nuremberg": [11.0767, 49.4521],
+  "Graz": [15.4395, 47.0707], "Salzburg": [15.4395, 47.8095], "Innsbruck": [13.0440, 47.2692],
+  "Basel": [8.5417, 47.5596], "Bern": [7.5886, 47.5596], "Lugano": [8.9511, 46.0037],
+  "Gothenburg": [11.9746, 57.7089], "Malmö": [11.9746, 55.6049], "Bergen": [5.3221, 60.3913],
+  "Stavanger": [5.3221, 58.9699], "Tromsø": [18.9553, 69.6492], "Aarhus": [10.2039, 56.1567],
+  "Aalborg": [10.2039, 57.0488], "Billund": [9.9187, 55.7316], "Turku": [22.2666, 60.4518],
+  "Tampere": [23.7600, 61.4978], "Oulu": [9.9187, 65.0121], "Rovaniemi": [25.4682, 65.5000],
+  "Skopje": [21.4280, 42.0050], "Podgorica": [19.2636, 42.4411], "Chisinau": [28.8303, 47.0105], 
+  "Cluj-Napoca": [23.5900, 46.7712], "Timisoara": [23.5900, 45.7489], "Iasi": [27.5689, 47.1585], 
+  "Varna": [27.9147, 43.2141], "Burgas": [27.9147, 42.5048], "Plovdiv": [27.4626, 42.1354], 
+  "Ohrid": [20.8016, 41.1130]
+};
 
 const COUNTRY_CENTER_COORDS = { "US": [-95.71, 37.09], "GB": [-3.43, 55.37], "IN": [78.96, 20.59], "BR": [-51.92, -14.23], "JP": [138.25, 36.20], "CA": [-106.34, 56.13], "FR": [2.21, 46.22], "ES": [-3.74, 40.46], "DE": [10.45, 51.16], "IT": [12.56, 41.87], "CH": [8.22, 46.81], "AT": [14.55, 47.51], "NL": [5.29, 52.13], "AE": [53.84, 23.68], "HR": [15.20, 45.10], "PT": [-8.22, 39.39], "BG": [25.48, 42.73], "UA": [31.16, 48.37], "ID": [113.92, -0.78], "EG": [30.80, 26.82], "BE": [4.4699, 50.5039], "CZ": [15.4730, 49.8175], "SK": [19.6990, 48.6690], "PL": [19.1451, 51.9194], "HU": [19.5033, 47.1625], "LU": [6.1296, 49.8153], "SE": [18.0686, 59.3293], "NO": [10.7522, 59.9139], "DK": [9.5018, 56.2639], "FI": [25.7482, 61.9241], "IE": [-8.2439, 53.4129], "GR": [21.8243, 39.0742], "RO": [24.9668, 45.9432], "TR": [35.2433, 38.9637], "ZA": [22.9375, -30.5595], "AU": [133.7751, -25.2744], "NZ": [174.8860, -40.9006], "AR": [-63.6167, -38.4161], "CL": [-71.5430, -35.6751], "CO": [-74.2973, 4.5709], "MX": [-102.5528, 23.6345], "VN": [108.2772, 14.0583], "MY": [101.9758, 4.2105], "PH": [121.7740, 12.8797], "SG": [103.8198, 1.3521], "TH": [100.9925, 15.8700], "KR": [127.7669, 35.9078], "IL": [34.8516, 31.0461], "EE": [25.0136, 58.5953], "LV": [24.6032, 56.8796], "LT": [23.8813, 55.1694], "IS": [-19.0208, 64.9631], "PA": [-80.7821, 8.5380], "OM": [55.9233, 21.5126], "AG": [-61.7964, 17.0608], "SV": [-88.8965, 13.7942], "NI": [-85.2072, 12.8654], "KE": [37.9062, -0.0236], "SN": [-14.4524, 14.4974], "DZ": [1.6596, 28.0339], "LY": [17.2283, 26.3351], "DJ": [42.5903, 11.8251], "IR": [53.6880, 32.4279], "TJ": [71.2761, 38.8610], "BW": [24.6849, -22.3285], "NR": [166.9315, -0.5228], "FM": [158.1499, 7.4256], "KP": [127.5101, 40.3399], "CU": [-77.7812, 21.5218], "NG": [8.6753, 9.0820], "PG": [143.9555, -6.3150], "RS": [21.0059, 44.0165], "BA": [17.6791, 43.9159], "AL": [20.1683, 41.1533], "MD": [28.3699, 47.4116], "MK": [21.7453, 41.6086] };
 
@@ -1088,7 +1146,7 @@ export default function App() {
               title="Pro Workspace (DIY Analytics)"
             />
           </div>
-          <span className="text-[10px] text-slate-600">v1.7</span>
+          <span className="text-[10px] text-slate-600">v1.8</span>
         </div>
       </div>
 
