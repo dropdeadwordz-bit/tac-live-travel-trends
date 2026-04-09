@@ -49,7 +49,7 @@ const getSafeDocRef = (firestoreDb, targetAppId, collectionName, documentId) => 
   return doc(firestoreDb, fullPath);
 };
 
-// --- HILFSFUNKTION FÜR KALENDER-DATUM ---
+// --- HILFSFUNKTIONEN FÜR DATEN & KOORDINATEN ---
 const formatD = (str) => {
   if(!str) return "";
   const parts = str.split('-'); // ISO Date format: YYYY-MM-DD
@@ -57,7 +57,6 @@ const formatD = (str) => {
   return str;
 };
 
-// Formatiert Von-Bis Daten
 const formatRange = (start, end, fallback) => {
   const s = formatD(start);
   const e = formatD(end);
@@ -67,6 +66,16 @@ const formatRange = (start, end, fallback) => {
   return fallback;
 };
 
+// Fallback-Algorithmus, falls ein Land/Stadt völlig unbekannt ist (verhindert Datenverlust)
+const getFallbackCoord = (str) => {
+  if(!str) return [0,0];
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  // Platziert unbekannte Hotspots im Ozean, um sie sichtbar zu halten, ohne bestehende Länder zu überlagern
+  const lon = -40 + (Math.abs(hash) % 20); 
+  const lat = 10 + ((Math.abs(hash) >> 5) % 30);
+  return [lon, lat];
+};
 
 // ==========================================
 // 🛠️ FALLBACK-DATEN (Wenn DB leer/offline)
@@ -118,18 +127,23 @@ IT,CH,Tessin,International,400000`;
 
 
 // ==========================================
-// 🔧 HILFSFUNKTIONEN & WÖRTERBÜCHER
+// 🔧 WÖRTERBÜCHER (MASSIV ERWEITERT)
 // ==========================================
 const getFlagImgHtml = (countryCode) => {
   if (!countryCode || countryCode.length !== 2) return '';
   return `<img src="https://flagcdn.com/w20/${countryCode.toLowerCase()}.png" style="width:16px; height:auto; display:inline-block; vertical-align:middle; border-radius:2px; margin-right:4px; box-shadow: 0 1px 2px rgba(0,0,0,0.2);" alt="${countryCode}" />`;
 };
 
-const COUNTRY_NAMES = { "DE": "Deutschland", "AT": "Österreich", "CH": "Schweiz", "US": "USA", "GB": "Großbritannien", "FR": "Frankreich", "ES": "Spanien", "IT": "Italien", "NL": "Niederlande", "TR": "Türkei", "AE": "Ver. Arab. Emirate", "TH": "Thailand", "SG": "Singapur", "CZ": "Tschechien", "PR": "Puerto Rico", "BB": "Barbados", "BE": "Belgien", "HU": "Ungarn", "IL": "Israel", "CA": "Kanada", "BG": "Bulgarien", "IE": "Irland", "MX": "Mexiko", "VE": "Venezuela", "MA": "Marokko", "IN": "Indien", "DZ": "Algerien", "EG": "Ägypten", "ZA": "Südafrika", "GR": "Griechenland", "CY": "Zypern", "HR": "Kroatien", "PT": "Portugal", "JP": "Japan", "BR": "Brasilien", "CN": "China", "RU": "Russland", "UA": "Ukraine", "ID": "Indonesien" };
-const COUNTRY_TO_CONTINENT = { "DE": "Europa", "AT": "Europa", "CH": "Europa", "GB": "Europa", "FR": "Europa", "ES": "Europa", "IT": "Europa", "NL": "Europa", "CZ": "Europa", "BE": "Europa", "HU": "Europa", "BG": "Europa", "IE": "Europa", "GR": "Europa", "CY": "Europa", "MT": "Europa", "HR": "Europa", "IS": "Europa", "NO": "Europa", "SE": "Europa", "DK": "Europa", "FI": "Europa", "PL": "Europa", "RO": "Europa", "PT": "Europa", "UA": "Europa", "US": "Nord- & Mittelamerika", "CA": "Nord- & Mittelamerika", "MX": "Nord- & Mittelamerika", "PR": "Nord- & Mittelamerika", "BB": "Nord- & Mittelamerika", "BR": "Südamerika", "AR": "Südamerika", "CO": "Südamerika", "CL": "Südamerika", "TH": "Asien", "SG": "Asien", "IN": "Asien", "JP": "Asien", "CN": "Asien", "RU": "Asien", "ID": "Asien", "TR": "Naher Osten", "AE": "Naher Osten", "IL": "Naher Osten", "QA": "Naher Osten", "SA": "Naher Osten", "EG": "Afrika", "ZA": "Afrika", "MA": "Afrika", "AU": "Ozeanien", "NZ": "Ozeanien" };
+const COUNTRY_NAMES = { "DE": "Deutschland", "AT": "Österreich", "CH": "Schweiz", "US": "USA", "GB": "Großbritannien", "FR": "Frankreich", "ES": "Spanien", "IT": "Italien", "NL": "Niederlande", "TR": "Türkei", "AE": "Ver. Arab. Emirate", "TH": "Thailand", "SG": "Singapur", "CZ": "Tschechien", "PR": "Puerto Rico", "BB": "Barbados", "BE": "Belgien", "HU": "Ungarn", "IL": "Israel", "CA": "Kanada", "BG": "Bulgarien", "IE": "Irland", "MX": "Mexiko", "VE": "Venezuela", "MA": "Marokko", "IN": "Indien", "DZ": "Algerien", "EG": "Ägypten", "ZA": "Südafrika", "GR": "Griechenland", "CY": "Zypern", "HR": "Kroatien", "PT": "Portugal", "JP": "Japan", "BR": "Brasilien", "CN": "China", "RU": "Russland", "UA": "Ukraine", "ID": "Indonesien", "SK": "Slowakei", "PL": "Polen", "LU": "Luxemburg", "SE": "Schweden", "NO": "Norwegen", "DK": "Dänemark", "FI": "Finnland", "RO": "Rumänien", "AU": "Australien", "NZ": "Neuseeland", "AR": "Argentinien", "CL": "Chile", "CO": "Kolumbien", "VN": "Vietnam", "MY": "Malaysia", "PH": "Philippinen", "KR": "Südkorea" };
+const COUNTRY_TO_CONTINENT = { "DE": "Europa", "AT": "Europa", "CH": "Europa", "GB": "Europa", "FR": "Europa", "ES": "Europa", "IT": "Europa", "NL": "Europa", "CZ": "Europa", "BE": "Europa", "HU": "Europa", "BG": "Europa", "IE": "Europa", "GR": "Europa", "CY": "Europa", "MT": "Europa", "HR": "Europa", "IS": "Europa", "NO": "Europa", "SE": "Europa", "DK": "Europa", "FI": "Europa", "PL": "Europa", "RO": "Europa", "PT": "Europa", "UA": "Europa", "LU": "Europa", "SK": "Europa", "US": "Nord- & Mittelamerika", "CA": "Nord- & Mittelamerika", "MX": "Nord- & Mittelamerika", "PR": "Nord- & Mittelamerika", "BB": "Nord- & Mittelamerika", "BR": "Südamerika", "AR": "Südamerika", "CO": "Südamerika", "CL": "Südamerika", "TH": "Asien", "SG": "Asien", "IN": "Asien", "JP": "Asien", "CN": "Asien", "RU": "Asien", "ID": "Asien", "VN": "Asien", "MY": "Asien", "PH": "Asien", "KR": "Asien", "TR": "Naher Osten", "AE": "Naher Osten", "IL": "Naher Osten", "QA": "Naher Osten", "SA": "Naher Osten", "EG": "Afrika", "ZA": "Afrika", "MA": "Afrika", "AU": "Ozeanien", "NZ": "Ozeanien" };
+
 const CITY_COORDS = { "Frankfurt": [8.6821, 50.1109], "Berlin": [13.4050, 52.5200], "Munich": [11.5820, 48.1351], "Vienna": [16.3738, 48.2082], "Zürich": [8.5417, 47.3769], "Barcelona": [2.1734, 41.3851], "London": [-0.1278, 51.5074], "Paris": [2.3522, 48.8566], "Amsterdam": [4.9041, 52.3676], "Dubai": [55.2708, 25.2048], "New York": [-74.0060, 40.7128], "Washington": [-77.0369, 38.9072], "San Juan": [-66.1057, 18.4655], "Prague": [14.4378, 50.0755], "İstanbul": [28.9784, 41.0082], "Bridgetown": [-59.6167, 13.0968], "Brussels": [4.3517, 50.8503], "Milan": [9.1900, 45.4642], "Budapest": [19.0402, 47.4979], "Bilbao": [-2.9350, 43.2630], "Tel Aviv-Yafo": [34.8000, 32.0833], "Bangkok": [100.5018, 13.7563] };
-const COUNTRY_CENTER_COORDS = { "US": [-95.71, 37.09], "GB": [-3.43, 55.37], "IN": [78.96, 20.59], "BR": [-51.92, -14.23], "JP": [138.25, 36.20], "CA": [-106.34, 56.13], "FR": [2.21, 46.22], "ES": [-3.74, 40.46], "DE": [10.45, 51.16], "IT": [12.56, 41.87], "CH": [8.22, 46.81], "AT": [14.55, 47.51], "NL": [5.29, 52.13], "AE": [53.84, 23.68], "HR": [15.20, 45.10], "PT": [-8.22, 39.39], "BG": [25.48, 42.73], "UA": [31.16, 48.37], "ID": [113.92, -0.78], "EG": [30.80, 26.82] };
-const REGION_COORDS = { "England": [-1.17, 52.35], "Florida": [-81.51, 27.66], "California": [-119.41, 36.77], "Texas": [-99.90, 31.96], "Maharashtra": [75.71, 19.75], "State of São Paulo": [-48.10, -23.55], "Tokyo": [139.69, 35.68], "New York": [-75.00, 43.00], "Osaka": [135.50, 34.69], "Ontario": [-85.32, 51.25], "Tennessee": [-86.58, 35.51], "Karnataka": [75.71, 15.31], "North Carolina": [-79.01, 35.75], "Île-de-France": [2.32, 48.84], "Tamil Nadu": [78.65, 11.12], "Valencian Community": [-0.37, 39.48], "Georgia": [-82.90, 32.16], "South Carolina": [-81.16, 33.83], "Illinois": [-89.39, 40.63], "Bavaria": [11.49, 48.79], "Scotland": [-4.20, 56.49], "Nevada": [-116.41, 38.80], "Calabria": [16.28, 38.90], "Brittany": [-2.80, 48.20], "Tessin": [8.96, 46.20], "Ticino": [8.96, 46.20] };
+
+// Um alle in deinen Test-CSVs genannten Länder abzufangen
+const COUNTRY_CENTER_COORDS = { "US": [-95.71, 37.09], "GB": [-3.43, 55.37], "IN": [78.96, 20.59], "BR": [-51.92, -14.23], "JP": [138.25, 36.20], "CA": [-106.34, 56.13], "FR": [2.21, 46.22], "ES": [-3.74, 40.46], "DE": [10.45, 51.16], "IT": [12.56, 41.87], "CH": [8.22, 46.81], "AT": [14.55, 47.51], "NL": [5.29, 52.13], "AE": [53.84, 23.68], "HR": [15.20, 45.10], "PT": [-8.22, 39.39], "BG": [25.48, 42.73], "UA": [31.16, 48.37], "ID": [113.92, -0.78], "EG": [30.80, 26.82], "BE": [4.4699, 50.5039], "CZ": [15.4730, 49.8175], "SK": [19.6990, 48.6690], "PL": [19.1451, 51.9194], "HU": [19.5033, 47.1625], "LU": [6.1296, 49.8153], "SE": [18.0686, 59.3293], "NO": [10.7522, 59.9139], "DK": [9.5018, 56.2639], "FI": [25.7482, 61.9241], "IE": [-8.2439, 53.4129], "GR": [21.8243, 39.0742], "RO": [24.9668, 45.9432], "TR": [35.2433, 38.9637], "ZA": [22.9375, -30.5595], "AU": [133.7751, -25.2744], "NZ": [174.8860, -40.9006], "AR": [-63.6167, -38.4161], "CL": [-71.5430, -35.6751], "CO": [-74.2973, 4.5709], "MX": [-102.5528, 23.6345], "VN": [108.2772, 14.0583], "MY": [101.9758, 4.2105], "PH": [121.7740, 12.8797], "SG": [103.8198, 1.3521], "TH": [100.9925, 15.8700], "KR": [127.7669, 35.9078], "IL": [34.8516, 31.0461], "EE": [25.0136, 58.5953], "LV": [24.6032, 56.8796], "LT": [23.8813, 55.1694], "IS": [-19.0208, 64.9631], "PA": [-80.7821, 8.5380], "OM": [55.9233, 21.5126], "AG": [-61.7964, 17.0608], "SV": [-88.8965, 13.7942], "NI": [-85.2072, 12.8654], "KE": [37.9062, -0.0236], "SN": [-14.4524, 14.4974], "DZ": [1.6596, 28.0339], "LY": [17.2283, 26.3351], "DJ": [42.5903, 11.8251], "IR": [53.6880, 32.4279], "TJ": [71.2761, 38.8610], "BW": [24.6849, -22.3285], "NR": [166.9315, -0.5228], "FM": [158.1499, 7.4256], "KP": [127.5101, 40.3399], "CU": [-77.7812, 21.5218], "NG": [8.6753, 9.0820], "PG": [143.9555, -6.3150] };
+
+const REGION_COORDS = { "England": [-1.17, 52.35], "Florida": [-81.51, 27.66], "California": [-119.41, 36.77], "Texas": [-99.90, 31.96], "Maharashtra": [75.71, 19.75], "State of São Paulo": [-48.10, -23.55], "Tokyo": [139.69, 35.68], "New York": [-75.00, 43.00], "Osaka": [135.50, 34.69], "Ontario": [-85.32, 51.25], "Tennessee": [-86.58, 35.51], "Karnataka": [75.71, 15.31], "North Carolina": [-79.01, 35.75], "Île-de-France": [2.32, 48.84], "Tamil Nadu": [78.65, 11.12], "Valencian Community": [-0.37, 39.48], "Georgia": [-82.90, 32.16], "South Carolina": [-81.16, 33.83], "Illinois": [-89.39, 40.63], "Bavaria": [11.49, 48.79], "Scotland": [-4.20, 56.49], "Nevada": [-116.41, 38.80], "Calabria": [16.28, 38.90], "Brittany": [-2.80, 48.20], "Tessin": [8.96, 46.20], "Ticino": [8.96, 46.20], "Andalusia": [-4.4203, 37.3828], "Catalonia": [1.5209, 41.5912], "Nouvelle-Aquitaine": [0.1073, 45.3333], "Occitanie": [2.1404, 43.8927], "Hawaii": [-155.5828, 19.8968], "Pennsylvania": [-77.1945, 41.2033], "Arizona": [-111.0937, 34.0489], "Guizhou": [106.7135, 26.8154], "Chelyabinsk Oblast": [61.4026, 55.1540], "Sverdlovsk Oblast": [60.5975, 56.8389], "Yaroslavl Oblast": [39.8737, 57.6261] };
+
 const PLANE_PATH = 'path://M1705.06,1318.313v-89.254l-319.9-221.799l0.073-208.063c0.521-84.662-26.629-121.796-63.961-121.491c-37.332-0.305-64.482,36.829-63.961,121.491l0.073,208.063l-319.9,221.799v89.254l330.343-157.288l12.238,241.308l-134.449,92.931l0.531,42.034l175.125-42.917l175.125,42.917l0.531-42.034l-134.449-92.931l12.238-241.308L1705.06,1318.313z';
 
 
@@ -146,7 +160,6 @@ export default function App() {
   const [adminFlightDate, setAdminFlightDate] = useState("");
   const [adminFlightCsv, setAdminFlightCsv] = useState(null);
   
-  // Neu: Start- und Enddatum pro Zeitraum für Admin
   const [adminAccDate1Start, setAdminAccDate1Start] = useState("");
   const [adminAccDate1End, setAdminAccDate1End] = useState("");
   const [adminAccDate2Start, setAdminAccDate2Start] = useState("");
@@ -189,7 +202,6 @@ export default function App() {
   const [tempFlightFile, setTempFlightFile] = useState(null);
   const [tempFlightDate, setTempFlightDate] = useState("");
   
-  // Neu: Start- und Enddatum pro Zeitraum für DIY User
   const [tempAccDate1Start, setTempAccDate1Start] = useState("");
   const [tempAccDate1End, setTempAccDate1End] = useState("");
   const [tempAccDate2Start, setTempAccDate2Start] = useState("");
@@ -236,9 +248,7 @@ export default function App() {
       initAuth();
 
       const unsubscribe = onAuthStateChanged(auth, (u) => setUser(u));
-      return () => {
-        unsubscribe();
-      };
+      return () => unsubscribe();
     } else {
       // Offline / Kein Firebase Fallback laden
       setFlightsGlobalCsv(DEFAULT_FLIGHTS_CSV);
@@ -293,6 +303,7 @@ export default function App() {
     const lines = csvText.trim().split('\n');
     const parsedData = [];
     const delimiter = lines[1] && lines[1].includes(';') ? ';' : ',';
+    
     for (let i = 2; i < lines.length; i++) {
       const line = lines[i].replace(/\r/g, '').trim();
       if (!line) continue;
@@ -303,9 +314,20 @@ export default function App() {
       const originCity = originFull.includes('-') ? originFull.split('-')[1].trim() : originFull;
       const destCountry = destFull.includes('-') ? destFull.split('-')[0].trim() : 'Unbekannt';
       const destCity = destFull.includes('-') ? destFull.split('-')[1].trim() : destFull;
-      if (CITY_COORDS[originCity] && CITY_COORDS[destCity]) {
-        parsedData.push({ originCountry, originCity, destCountry, destCity, routeId: cols[2], d84_ad: parseFloat(cols[3]) || 0, d84_yoy: parseFloat(cols[4]) || 0, d28_ad: parseFloat(cols[5]) || 0, d28_mom: parseFloat(cols[6]) || 0, d28_yoy: parseFloat(cols[7]) || 0, d7_ad: parseFloat(cols[8]) || 0, d7_wow: parseFloat(cols[9]) || 0, d7_yoy: parseFloat(cols[10]) || 0 });
-      }
+      
+      // NEU: Intelligentes Koordinaten-Fallback
+      // 1. Suche nach Stadt. 2. Wenn nicht gefunden, nimm Landesmitte. 3. Wenn Land unbekannt, berechne Dummy-Location.
+      const oCoord = CITY_COORDS[originCity] || COUNTRY_CENTER_COORDS[originCountry] || getFallbackCoord(originCity);
+      const dCoord = CITY_COORDS[destCity] || COUNTRY_CENTER_COORDS[destCountry] || getFallbackCoord(destCity);
+
+      parsedData.push({ 
+        originCountry, originCity, destCountry, destCity, 
+        oCoord, dCoord, // Gesicherte Koordinaten speichern
+        routeId: cols[2], 
+        d84_ad: parseFloat(cols[3]) || 0, d84_yoy: parseFloat(cols[4]) || 0, 
+        d28_ad: parseFloat(cols[5]) || 0, d28_mom: parseFloat(cols[6]) || 0, d28_yoy: parseFloat(cols[7]) || 0, 
+        d7_ad: parseFloat(cols[8]) || 0, d7_wow: parseFloat(cols[9]) || 0, d7_yoy: parseFloat(cols[10]) || 0 
+      });
     }
     return parsedData;
   };
@@ -329,11 +351,13 @@ export default function App() {
   const mergeAccData = (currArray, prevArray) => {
     const joined = [];
     currArray.forEach(curr => {
-       if(curr.adOpp < 1000) return; 
+       // ACHTUNG: Der Rauschfilter (<1000) wurde hier absichtlich entfernt, damit das Tool keine gültigen kleinen Daten verschluckt!
        const prev = prevArray.find(p => p.userCountry === curr.userCountry && p.destCountry === curr.destCountry && p.destRegion === curr.destRegion);
        const prevAdOpp = prev ? prev.adOpp : 0;
        let wow = 0;
-       if(prevAdOpp > 0) wow = (curr.adOpp - prevAdOpp) / prevAdOpp;
+       if(prevAdOpp > 0) {
+         wow = (curr.adOpp - prevAdOpp) / prevAdOpp;
+       }
        joined.push({ ...curr, prevAdOpp, trend: wow, routeId: `${curr.userCountry}-${curr.destRegion}` });
     });
     return joined;
@@ -511,13 +535,14 @@ export default function App() {
 
       const lineData = currentData.map(row => {
         const width = (maxAd > minAd) ? (1.5 + 3.5 * ((row.currentAdOpp - minAd) / (maxAd - minAd))) : 3;
-        return { coords: [CITY_COORDS[row.originCity], CITY_COORDS[row.destCity]], lineStyle: { width: width, color: getTrendColor(row.currentTrend), curveness: 0.2 }, details: row };
+        // Benutzt jetzt die sicher abgeleiteten Koordinaten!
+        return { coords: [row.oCoord, row.dCoord], lineStyle: { width: width, color: getTrendColor(row.currentTrend), curveness: 0.2 }, details: row };
       });
 
       const scatterData = [];
       currentData.forEach(row => {
-        if (!scatterData.find(s => s.name === row.originCity)) scatterData.push({ name: row.originCity, value: CITY_COORDS[row.originCity] });
-        if (!scatterData.find(s => s.name === row.destCity)) scatterData.push({ name: row.destCity, value: CITY_COORDS[row.destCity] });
+        if (!scatterData.find(s => s.name === row.originCity)) scatterData.push({ name: row.originCity, value: row.oCoord });
+        if (!scatterData.find(s => s.name === row.destCity)) scatterData.push({ name: row.destCity, value: row.dCoord });
       });
 
       option = {
@@ -559,18 +584,17 @@ export default function App() {
       const regionAgg = {};
 
       filteredData.forEach(row => {
-        const originCoord = COUNTRY_CENTER_COORDS[row.userCountry] || [0,0];
-        const destCoord = REGION_COORDS[row.destRegion] || COUNTRY_CENTER_COORDS[row.destCountry] || [0,0];
+        // Fallback Logik nutzen, damit das Array nie mit [0,0] abstürzt!
+        const originCoord = COUNTRY_CENTER_COORDS[row.userCountry] || getFallbackCoord(row.userCountry);
+        const destCoord = REGION_COORDS[row.destRegion] || COUNTRY_CENTER_COORDS[row.destCountry] || getFallbackCoord(row.destRegion || row.destCountry);
         
-        if(originCoord[0] !== 0 && destCoord[0] !== 0) {
-          const width = (maxAd > minAd) ? (1.5 + 3.5 * ((row.adOpp - minAd) / (maxAd - minAd))) : 3;
-          lineData.push({ coords: [originCoord, destCoord], lineStyle: { width: width, color: getTrendColor(row.trend), curveness: 0.2 }, details: row });
-          if (!originScatter.find(s => s.name === row.userCountry)) originScatter.push({ name: row.userCountry, value: originCoord });
+        const width = (maxAd > minAd) ? (1.5 + 3.5 * ((row.adOpp - minAd) / (maxAd - minAd))) : 3;
+        lineData.push({ coords: [originCoord, destCoord], lineStyle: { width: width, color: getTrendColor(row.trend), curveness: 0.2 }, details: row });
+        if (!originScatter.find(s => s.name === row.userCountry)) originScatter.push({ name: row.userCountry, value: originCoord });
 
-          if(!regionAgg[row.destRegion]) regionAgg[row.destRegion] = { country: row.destCountry, coord: destCoord, adOpp: 0, prevAdOpp: 0 };
-          regionAgg[row.destRegion].adOpp += row.adOpp;
-          regionAgg[row.destRegion].prevAdOpp += row.prevAdOpp;
-        }
+        if(!regionAgg[row.destRegion]) regionAgg[row.destRegion] = { country: row.destCountry, coord: destCoord, adOpp: 0, prevAdOpp: 0 };
+        regionAgg[row.destRegion].adOpp += row.adOpp;
+        regionAgg[row.destRegion].prevAdOpp += row.prevAdOpp;
       });
 
       const destHotspots = Object.keys(regionAgg).map(reg => {
@@ -643,11 +667,11 @@ export default function App() {
           
           {/* LOGO: NEUER GEHEIMER ADMIN-ZUGANG (Doppelklick) */}
           <div 
-            className="flex items-center gap-3 mb-4 cursor-pointer select-none" 
+            className="flex items-center gap-3 mb-4 cursor-pointer select-none group" 
             onDoubleClick={() => setIsAdminPanelOpen(true)}
             title=" "
           >
-            <MapIcon className="text-blue-400 w-8 h-8 shrink-0" />
+            <MapIcon className="text-blue-400 w-8 h-8 shrink-0 group-hover:text-blue-300 transition-colors" />
             <h1 className="text-xl font-bold text-white leading-tight">TAC<br/><span className="text-sm font-normal text-slate-400">Travel Trends</span></h1>
           </div>
 
@@ -866,7 +890,7 @@ export default function App() {
               title="Pro Workspace (DIY Analytics)"
             />
           </div>
-          <span className="text-[10px] text-slate-600">v1.3</span>
+          <span className="text-[10px] text-slate-600">v1.4</span>
         </div>
       </div>
 
