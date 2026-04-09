@@ -204,21 +204,33 @@ const CITY_COORDS = {
   "Rovaniemi": [25.4682, 65.5000], "Skopje": [21.4280, 42.0050], "Podgorica": [19.2636, 42.4411], 
   "Chisinau": [28.8303, 47.0105], "Cluj-Napoca": [23.5900, 46.7712], "Timisoara": [23.5900, 45.7489], 
   "Iasi": [27.5689, 47.1585], "Varna": [27.9147, 43.2141], "Burgas": [27.9147, 42.5048], 
-  "Plovdiv": [27.4626, 42.1354], "Ohrid": [20.8016, 41.1130],
-  // Neu aufgenommen für Geodaten-Reparatur
-  "Salzburg": [13.0550, 47.8095], "Vorarlberg": [9.9065, 47.2304], "Dubrovnik": [18.0944, 42.6507], "Liberec": [15.0562, 50.7671]
+  "Plovdiv": [27.4626, 42.1354], "Ohrid": [20.8016, 41.1130], "Salzburg": [13.0550, 47.8095], 
+  "Vorarlberg": [9.9065, 47.2304], "Dubrovnik": [18.0944, 42.6507], "Liberec": [15.0562, 50.7671]
 };
 
 const COUNTRY_CENTER_COORDS = { "US": [-95.71, 37.09], "GB": [-3.43, 55.37], "IN": [78.96, 20.59], "BR": [-51.92, -14.23], "JP": [138.25, 36.20], "CA": [-106.34, 56.13], "FR": [2.21, 46.22], "ES": [-3.74, 40.46], "DE": [10.45, 51.16], "IT": [12.56, 41.87], "CH": [8.22, 46.81], "AT": [14.55, 47.51], "NL": [5.29, 52.13], "AE": [53.84, 23.68], "HR": [15.20, 45.10], "PT": [-8.22, 39.39], "BG": [25.48, 42.73], "UA": [31.16, 48.37], "ID": [113.92, -0.78], "EG": [30.80, 26.82], "BE": [4.4699, 50.5039], "CZ": [15.4730, 49.8175], "SK": [19.6990, 48.6690], "PL": [19.1451, 51.9194], "HU": [19.5033, 47.1625], "LU": [6.1296, 49.8153], "SE": [18.0686, 59.3293], "NO": [10.7522, 59.9139], "DK": [9.5018, 56.2639], "FI": [25.7482, 61.9241], "IE": [-8.2439, 53.4129], "GR": [21.8243, 39.0742], "RO": [24.9668, 45.9432], "TR": [35.2433, 38.9637], "ZA": [22.9375, -30.5595], "AU": [133.7751, -25.2744], "NZ": [174.8860, -40.9006], "AR": [-63.6167, -38.4161], "CL": [-71.5430, -35.6751], "CO": [-74.2973, 4.5709], "MX": [-102.5528, 23.6345], "VN": [108.2772, 14.0583], "MY": [101.9758, 4.2105], "PH": [121.7740, 12.8797], "SG": [103.8198, 1.3521], "TH": [100.9925, 15.8700], "KR": [127.7669, 35.9078], "IL": [34.8516, 31.0461], "EE": [25.0136, 58.5953], "LV": [24.6032, 56.8796], "LT": [23.8813, 55.1694], "IS": [-19.0208, 64.9631], "PA": [-80.7821, 8.5380], "OM": [55.9233, 21.5126], "AG": [-61.7964, 17.0608], "SV": [-88.8965, 13.7942], "NI": [-85.2072, 12.8654], "KE": [37.9062, -0.0236], "SN": [-14.4524, 14.4974], "DZ": [1.6596, 28.0339], "LY": [17.2283, 26.3351], "DJ": [42.5903, 11.8251], "IR": [53.6880, 32.4279], "TJ": [71.2761, 38.8610], "BW": [24.6849, -22.3285], "NR": [166.9315, -0.5228], "FM": [158.1499, 7.4256], "KP": [127.5101, 40.3399], "CU": [-77.7812, 21.5218], "NG": [8.6753, 9.0820], "PG": [143.9555, -6.3150], "RS": [21.0059, 44.0165], "BA": [17.6791, 43.9159], "AL": [20.1683, 41.1533], "MD": [28.3699, 47.4116], "MK": [21.7453, 41.6086] };
 
+// MEGA WÖRTERBUCH FÜR REGIONEN
 const REGION_COORDS = {
+  // US States
   "California": [-121.4944, 38.5816], "Texas": [-97.7431, 30.2672], "Florida": [-84.2807, 30.4383], "New York": [-73.7562, 42.6526], "Pennsylvania": [-76.8836, 40.2732], "Illinois": [-89.6501, 39.7817], "Ohio": [-82.9988, 39.9612], "Georgia": [-84.3880, 33.7490], "North Carolina": [-78.6382, 35.7796], "Michigan": [-84.5555, 42.7325], "New Jersey": [-74.7597, 40.2171], "Virginia": [-77.4360, 37.5407], "Washington": [-122.9007, 47.0379], "Arizona": [-112.0740, 33.4484], "Massachusetts": [-71.0589, 42.3601], "Tennessee": [-86.7816, 36.1627], "Indiana": [-86.1581, 39.7684], "Missouri": [-92.1735, 38.5767], "Maryland": [-76.4922, 38.9784], "Wisconsin": [-89.3842, 43.0731], "Colorado": [-104.9903, 39.7392], "Minnesota": [-93.1015, 44.9537], "South Carolina": [-81.0348, 34.0007], "Alabama": [-86.3006, 32.3668], "Louisiana": [-91.1403, 30.4515], "Kentucky": [-84.8733, 38.2009], "Oregon": [-123.0351, 44.9429], "Oklahoma": [-97.5164, 35.4676], "Connecticut": [-72.6851, 41.7658], "Utah": [-111.8910, 40.7608], "Iowa": [-93.6091, 41.5908], "Nevada": [-119.7674, 39.1638], "Arkansas": [-92.2896, 34.7465], "Mississippi": [-90.1848, 32.2988], "Kansas": [-95.6890, 39.0558], "New Mexico": [-105.9378, 35.6870], "Nebraska": [-96.6753, 40.8136], "Idaho": [-116.2023, 43.6150], "West Virginia": [-81.6326, 38.3498], "Hawaii": [-157.8583, 21.3069],
+  // Canada Provinces
   "Ontario": [-79.3832, 43.6532], "Quebec": [-71.2080, 46.8139], "British Columbia": [-123.3656, 48.4284], "Alberta": [-113.4909, 53.5461],
+  // UK
   "England": [-0.1276, 51.5072], "Scotland": [-3.1883, 55.9533], "Wales": [-3.1791, 51.4816], "Northern Ireland": [-5.9301, 54.5973],
+  // Germany
   "Bavaria": [11.5820, 48.1351], "North Rhine-Westphalia": [6.7735, 51.2277], "Baden-Württemberg": [9.1829, 48.7758], "Hesse": [8.2415, 50.0826], "Lower Saxony": [9.7320, 52.3705], "Rhineland-Palatinate": [8.2473, 49.9929], "Berlin": [13.4050, 52.5200], "Saxony": [13.7373, 51.0504], "Hamburg": [9.9937, 53.5511], "Schleswig-Holstein": [10.1228, 54.3233], "Brandenburg": [13.0645, 52.3906], "Saxony-Anhalt": [11.6276, 52.1205], "Thuringia": [11.0299, 50.9804], "Mecklenburg-Vorpommern": [11.4148, 53.6355], "Bremen": [8.8017, 53.0793], "Saarland": [6.9969, 49.2390],
+  // Spain
   "Andalusia": [-5.9845, 37.3891], "Catalonia": [2.1686, 41.3874], "Madrid": [-3.7038, 40.4168], "Valencian Community": [-0.3763, 39.4699], "Galicia": [-8.5457, 42.8782], "Castile and León": [-4.7245, 41.6520], "Basque Country": [-2.9350, 43.2630], "Canary Islands": [-15.4134, 28.1174], "Castilla-La Mancha": [-4.0273, 39.8628], "Murcia": [-1.1307, 37.9922], "Aragon": [-0.8810, 41.6488], "Extremadura": [-6.3408, 38.9161], "Balearic Islands": [2.6502, 39.5696], "Asturias": [-5.8494, 43.3614], "Navarre": [-1.6432, 42.8169], "Cantabria": [-3.8044, 43.4623], "La Rioja": [-2.4437, 42.4627],
+  // France
   "Île-de-France": [2.3522, 48.8566], "Auvergne-Rhône-Alpes": [4.8357, 45.7640], "Nouvelle-Aquitaine": [-0.5792, 44.8378], "Occitanie": [1.4442, 43.6047], "Hauts-de-France": [3.0573, 50.6292], "Provence-Alpes-Côte d'Azur": [5.3698, 43.2965], "Grand Est": [7.7521, 48.5734], "Pays de la Loire": [-1.5536, 47.2184], "Brittany": [-1.6778, 48.1147], "Normandy": [-0.3600, 49.1800], "Bourgogne-Franche-Comté": [5.0415, 47.3220], "Centre-Val de Loire": [1.9093, 47.9029], "Corsica": [8.7369, 41.9271],
+  // Italy
   "Lombardy": [9.1900, 45.4642], "Lazio": [12.4964, 41.9028], "Campania": [14.2681, 40.8518], "Sicily": [13.3614, 38.1157], "Veneto": [12.3155, 45.4408], "Emilia-Romagna": [11.3426, 44.4949], "Piedmont": [7.6869, 45.0703], "Apulia": [16.8719, 41.1171], "Tuscany": [11.2558, 43.7696], "Calabria": [16.5944, 38.9059], "Sardinia": [9.1114, 39.2153], "Liguria": [8.9463, 44.4056], "Marche": [13.5189, 43.6158], "Abruzzo": [13.3995, 42.3498], "Friuli-Venezia Giulia": [13.7768, 45.6495], "Trentino-South Tyrol": [11.1211, 46.0697], "Umbria": [12.3888, 43.1107], "Basilicata": [15.8051, 40.6404], "Molise": [14.6627, 41.5603], "Aosta Valley": [7.3201, 45.7373],
+  // Greece (Neu)
+  "South Aegean": [25.3289, 36.4408], "Crete": [24.8093, 35.2401], "Ionian Islands": [20.6249, 38.9954], "Central Macedonia": [22.9444, 40.6401], "Attica": [23.7275, 37.9838], "Peloponnese": [22.3815, 37.6664], "Epirus": [20.8450, 39.6649], "Thessaly": [22.4223, 39.5517], "Macedonia and Thrace": [22.9444, 40.6401], "Central Greece": [22.8465, 38.6120], "Western Greece": [21.7346, 38.2466], "Eastern Macedonia and Thrace": [24.8988, 41.0858], "North Aegean": [26.2307, 39.1118], "Decentralized Administration of Peloponnese, Western Greece and the Ionian": [21.7346, 38.2466], "Decentralized Administration of the Aegean": [25.3289, 36.4408], "Decentralized Administration of Crete": [24.8093, 35.2401],
+  // Turkey (Neu)
+  "Antalya Province": [30.7133, 36.8969], "Antalya": [30.7133, 36.8969], "Muğla Province": [28.3665, 37.2153], "Mugla Province": [28.3665, 37.2153], "Muğla": [28.3665, 37.2153], "Istanbul Province": [28.9784, 41.0082], "Istanbul": [28.9784, 41.0082], "İzmir Province": [27.1428, 38.4237], "Izmir Province": [27.1428, 38.4237], "İzmir": [27.1428, 38.4237], "Aydın Province": [27.8456, 37.8444], "Aydin Province": [27.8456, 37.8444], "Aydın": [27.8456, 37.8444], "Nevşehir Province": [34.7142, 38.6247], "Marmara Region": [28.9784, 41.0082], "Aegean Region": [27.1428, 38.4237], "Mediterranean Region": [30.7133, 36.8969],
+  // Others / International Tests
   "Tessin": [8.96, 46.20], "Ticino": [8.96, 46.20], "Vorarlberg": [9.9065, 47.2304], "Salzburg": [13.0550, 47.8095], "Dubrovnik": [18.0944, 42.6507], "Liberec": [15.0562, 50.7671]
 };
 
@@ -459,11 +471,17 @@ export default function App() {
        if(cols.length >= 5) {
            const userCountry = cols[0].trim();
            const destCountry = cols[1].trim();
-           const destRegion = cols[2].trim();
+           let destRegion = cols[2].trim();
            
+           // AUTO-FILTER: Ursprung EU + US/CA 
            const isOriginValid = ['US', 'CA'].includes(userCountry) || COUNTRY_TO_CONTINENT[userCountry] === 'Europa';
-           const isDestValid = COUNTRY_TO_CONTINENT[destCountry] === 'Europa';
-           if (!isOriginValid || !isDestValid) continue;
+           if (!isOriginValid) continue;
+
+           // NEU: Destinations-Logik für "Rest of World" -> Alles wird zu Land gruppiert
+           const isDestEuUsCaTr = ['US', 'CA', 'TR'].includes(destCountry) || COUNTRY_TO_CONTINENT[destCountry] === 'Europa';
+           if (!isDestEuUsCaTr) {
+               destRegion = COUNTRY_NAMES[destCountry] || destCountry;
+           }
 
            parsed.push({ userCountry, destCountry, destRegion, type: cols[3].trim(), adOpp: parseFloat(cols[4]) || 0 });
        }
@@ -764,7 +782,7 @@ export default function App() {
         
         let destCoord = REGION_COORDS[row.destRegion];
         if (!destCoord) {
-          const baseCoord = COUNTRY_CENTER_COORDS[row.destCountry] || getFallbackCoord(row.destCountry);
+          const baseCoord = COUNTRY_CENTER_COORDS[row.destCountry];
           destCoord = getFallbackCoord(row.destRegion || "unknown", baseCoord);
         }
         
@@ -916,7 +934,7 @@ export default function App() {
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {availableCountries.map(country => (
-                      <button key={country} onClick={() => toggleCountry(country)} title={COUNTRY_NAMES[country] || country} className={`flex justify-center items-center p-1.5 rounded transition-colors border ${activeCountries.includes(country) ? 'bg-blue-600/20 border-blue-500 opacity-100 shadow-sm scale-100' : 'bg-slate-800 border-slate-700 hover:bg-slate-700 opacity-30 grayscale scale-95'}`}>
+                      <button key={country} onClick={() => toggleCountry(country)} title={COUNTRY_NAMES[country] || country} className={`flex justify-center items-center p-1.5 rounded transition-colors border ${activeCountries.includes(country) ? 'bg-blue-600/20 border-blue-500 opacity-100 shadow-sm scale-100' : 'bg-slate-800 border-slate-700 hover:bg-slate-700 opacity-50 saturate-50 scale-95'}`}>
                         <img src={`https://flagcdn.com/w40/${country.toLowerCase()}.png`} alt={country} className="w-6 rounded-sm shadow-sm" />
                       </button>
                     ))}
@@ -946,7 +964,7 @@ export default function App() {
                             {destByContinent[continent].map(country => {
                               const isValid = validDestCountries.includes(country); 
                               return (
-                                <button key={`dest-${country}`} onClick={() => isValid && toggleDestCountry(country)} title={!isValid ? `${COUNTRY_NAMES[country] || country} (Keine Routen)` : (COUNTRY_NAMES[country] || country)} className={`flex justify-center items-center p-1.5 rounded transition-colors border ${!isValid ? 'opacity-10 cursor-not-allowed bg-slate-900 border-slate-800 grayscale' : activeDestCountries.includes(country) ? 'bg-emerald-600/20 border-emerald-500 opacity-100 shadow-sm scale-100' : 'bg-slate-800 border-slate-700 hover:bg-slate-700 opacity-30 grayscale scale-95'}`}>
+                                <button key={`dest-${country}`} onClick={() => isValid && toggleDestCountry(country)} title={!isValid ? `${COUNTRY_NAMES[country] || country} (Keine Routen)` : (COUNTRY_NAMES[country] || country)} className={`flex justify-center items-center p-1.5 rounded transition-colors border ${!isValid ? 'opacity-10 cursor-not-allowed bg-slate-900 border-slate-800 grayscale' : activeDestCountries.includes(country) ? 'bg-emerald-600/20 border-emerald-500 opacity-100 shadow-sm scale-100' : 'bg-slate-800 border-slate-700 hover:bg-slate-700 opacity-50 saturate-50 scale-95'}`}>
                                   <img src={`https://flagcdn.com/w40/${country.toLowerCase()}.png`} alt={country} className="w-6 rounded-sm shadow-sm" />
                                 </button>
                               );
@@ -1031,7 +1049,7 @@ export default function App() {
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {availableAccCountries.map(country => (
-                      <button key={country} onClick={() => toggleAccCountry(country)} title={COUNTRY_NAMES[country] || country} className={`flex justify-center items-center p-1.5 rounded transition-colors border ${activeAccCountries.includes(country) ? 'bg-indigo-600/20 border-indigo-500 opacity-100 shadow-sm scale-100' : 'bg-slate-800 border-slate-700 hover:bg-slate-700 opacity-30 grayscale scale-95'}`}>
+                      <button key={country} onClick={() => toggleAccCountry(country)} title={COUNTRY_NAMES[country] || country} className={`flex justify-center items-center p-1.5 rounded transition-colors border ${activeAccCountries.includes(country) ? 'bg-indigo-600/20 border-indigo-500 opacity-100 shadow-sm scale-100' : 'bg-slate-800 border-slate-700 hover:bg-slate-700 opacity-50 saturate-50 scale-95'}`}>
                         <img src={`https://flagcdn.com/w40/${country.toLowerCase()}.png`} alt={country} className="w-6 rounded-sm shadow-sm" />
                       </button>
                     ))}
@@ -1193,7 +1211,7 @@ export default function App() {
               title="Pro Workspace (DIY Analytics)"
             />
           </div>
-          <span className="text-[10px] text-slate-600">v2.0</span>
+          <span className="text-[10px] text-slate-600">v2.1</span>
         </div>
       </div>
 
