@@ -117,6 +117,45 @@ const getFallbackCoord = (str, baseCoord) => {
 };
 
 // ==========================================
+// 🧹 BEREINIGUNG VON CSV-DATEN VOR UPLOAD
+// ==========================================
+const filterFlightCsvText = (text) => {
+  if(!text) return "";
+  const lines = text.split('\n');
+  if(lines.length < 3) return text;
+  const delimiter = lines[1].includes(';') ? ';' : ',';
+  const filtered = [lines[0].replace(/\r/g, ''), lines[1].replace(/\r/g, '')];
+  for(let i=2; i<lines.length; i++) {
+    const line = lines[i].replace(/\r/g, '').trim();
+    if(!line) continue;
+    const cols = line.split(delimiter);
+    const v1 = parseFloat(cols[3]) || 0;
+    const v2 = parseFloat(cols[5]) || 0;
+    const v3 = parseFloat(cols[8]) || 0;
+    if(v1 > 0 || v2 > 0 || v3 > 0) filtered.push(line);
+  }
+  return filtered.join('\n');
+};
+
+const filterAccCsvText = (text) => {
+  if(!text) return "";
+  const lines = text.split('\n');
+  if(lines.length < 2) return text;
+  const delimiter = lines[0].includes(';') ? ';' : ',';
+  const filtered = [lines[0].replace(/\r/g, '')];
+  for(let i=1; i<lines.length; i++) {
+    const line = lines[i].replace(/\r/g, '').trim();
+    if(!line) continue;
+    const cols = line.split(delimiter);
+    if(cols.length >= 5) {
+      const adOpp = parseFloat(cols[4]) || 0;
+      if(adOpp > 0) filtered.push(line);
+    }
+  }
+  return filtered.join('\n');
+};
+
+// ==========================================
 // 🛠️ FALLBACK-DATEN (Wenn DB leer/offline)
 // ==========================================
 const DEFAULT_FLIGHTS_CSV = `Route,,,Last 84 Days,,Last 28 Days,,,Last 7 Days,,
@@ -670,9 +709,10 @@ export default function App() {
     if (!adminFlightCsv) return alert("Bitte eine Datei auswählen!");
     setIsSaving(true);
     try {
-      const text = await adminFlightCsv.text();
+      const rawText = await adminFlightCsv.text();
+      const cleanText = filterFlightCsvText(rawText);
       await setDoc(getSafeDocRef(db, appId, 'appConfig', 'flights'), {
-        csv: text,
+        csv: cleanText,
         lastUpdated: formatD(adminFlightDate) || "Heute"
       });
       setIsAdminPanelOpen(false);
@@ -687,13 +727,13 @@ export default function App() {
     try {
       const updateObj = {};
       if (adminAccCurrCsv && adminAccPrevCsv) {
-        updateObj.currentCsv = await adminAccCurrCsv.text();
-        updateObj.prevCsv = await adminAccPrevCsv.text();
+        updateObj.currentCsv = filterAccCsvText(await adminAccCurrCsv.text());
+        updateObj.prevCsv = filterAccCsvText(await adminAccPrevCsv.text());
         updateObj.lastUpdated = `${formatRange(adminAccDate1Start, adminAccDate1End, "Aktuell")} vs ${formatRange(adminAccDate2Start, adminAccDate2End, "Vorher")}`;
       }
       if (adminAccCurrCsv2 && adminAccPrevCsv2) {
-        updateObj.currentCsv2 = await adminAccCurrCsv2.text();
-        updateObj.prevCsv2 = await adminAccPrevCsv2.text();
+        updateObj.currentCsv2 = filterAccCsvText(await adminAccCurrCsv2.text());
+        updateObj.prevCsv2 = filterAccCsvText(await adminAccPrevCsv2.text());
         updateObj.lastUpdated2 = `${formatRange(adminAccDate3Start, adminAccDate3End, "Aktuell")} vs ${formatRange(adminAccDate4Start, adminAccDate4End, "Vorher")}`;
       }
       
@@ -710,20 +750,24 @@ export default function App() {
 
   const applyCustomFlights = async () => {
     if(!tempFlightFile) return;
-    const text = await tempFlightFile.text();
+    const rawText = await tempFlightFile.text();
+    const cleanText = filterFlightCsvText(rawText);
     setIsDefaultDataFlights(false);
     setIsFlightFiltersInitialized(false);
     setCustomFlightDate(formatD(tempFlightDate) || "Manuelles Datum");
-    setFlightsGlobalCsv(text);
+    setFlightsGlobalCsv(cleanText);
     setIsDiyModalOpen(false);
   };
 
   const applyCustomAcc = async () => {
     if(!tempAccCurrent || !tempAccPrevious) return;
-    const textCurr = await tempAccCurrent.text();
-    const textPrev = await tempAccPrevious.text();
-    const currRaw = parseAccCSV(textCurr);
-    const prevRaw = parseAccCSV(textPrev);
+    const rawCurr = await tempAccCurrent.text();
+    const rawPrev = await tempAccPrevious.text();
+    const cleanCurr = filterAccCsvText(rawCurr);
+    const cleanPrev = filterAccCsvText(rawPrev);
+    
+    const currRaw = parseAccCSV(cleanCurr);
+    const prevRaw = parseAccCSV(cleanPrev);
     setAccData(mergeAccData(currRaw, prevRaw));
     
     const l1 = formatRange(tempAccDate1Start, tempAccDate1End, "Aktuell");
@@ -1412,7 +1456,7 @@ export default function App() {
               title="Pro Workspace (DIY Analytics)"
             />
           </div>
-          <span className="text-[10px] text-slate-600">v3.1</span>
+          <span className="text-[10px] text-slate-600">v3.2</span>
         </div>
       </div>
 
