@@ -140,7 +140,9 @@ const getFlagImgHtml = (countryCode) => {
   return `<img src="https://flagcdn.com/w20/${countryCode.toLowerCase()}.png" style="width:16px; height:auto; display:inline-block; vertical-align:middle; border-radius:2px; margin-right:4px; box-shadow: 0 1px 2px rgba(0,0,0,0.2);" alt="${countryCode}" />`;
 };
 
-// MASSIVES GLOBALES LÄNDER UPDATE
+// ==========================================
+// 🔧 WÖRTERBÜCHER (BEREINIGT)
+// ==========================================
 const COUNTRY_NAMES = {
   "DE": "Deutschland", "AT": "Österreich", "CH": "Schweiz", "US": "USA", "GB": "Großbritannien",
   "FR": "Frankreich", "ES": "Spanien", "IT": "Italien", "NL": "Niederlande", "TR": "Türkei",
@@ -318,6 +320,7 @@ export default function App() {
 
   // --- UI STATES ---
   const [echartsReady, setEchartsReady] = useState(false);
+  const [user, setUser] = useState(null);
   const [isDiyModalOpen, setIsDiyModalOpen] = useState(false);
   const chartRef = useRef(null);
   const chartInstance = useRef(null);
@@ -1397,7 +1400,7 @@ export default function App() {
               title="Pro Workspace (DIY Analytics)"
             />
           </div>
-          <span className="text-[10px] text-slate-600">v2.7</span>
+          <span className="text-[10px] text-slate-600">v2.9</span>
         </div>
       </div>
 
