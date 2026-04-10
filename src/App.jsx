@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Upload, Map as MapIcon, Calendar, TrendingUp, XCircle, EyeOff, Filter, SlidersHorizontal, ChevronDown, ChevronUp, Bed, CheckCircle, RefreshCw, Lock, Database, X, CloudUpload, Search } from 'lucide-react';
+import { Upload, Map as MapIcon, Calendar, TrendingUp, TrendingDown, XCircle, EyeOff, Filter, SlidersHorizontal, ChevronDown, ChevronUp, Bed, CheckCircle, RefreshCw, Lock, Database, X, CloudUpload, Search, Trophy, Info } from 'lucide-react';
 
 // === FIREBASE IMPORTS ===
 import { initializeApp } from 'firebase/app';
@@ -63,7 +63,6 @@ const formatRange = (start, end, fallback) => {
   return fallback;
 };
 
-// Berechnet "Letzte Woche Mo-So" und davor
 const getPreviousWeekDates = (weeksAgo) => {
   const d = new Date();
   const day = d.getDay() === 0 ? 7 : d.getDay(); 
@@ -78,7 +77,6 @@ const getPreviousWeekDates = (weeksAgo) => {
   };
 };
 
-// Berechnet exakte 30-Tage Perioden
 const get30DayDates = () => {
   const d = new Date();
   const day = d.getDay() === 0 ? 7 : d.getDay(); 
@@ -104,14 +102,11 @@ const lastWeekDates = getPreviousWeekDates(1);
 const twoWeeksAgoDates = getPreviousWeekDates(2);
 const dates30 = get30DayDates();
 
-// Fallback-Algorithmus - Zentriert Punkte sicher eng um das Land, ohne Grenz-Überschreitungen!
 const getFallbackCoord = (str, baseCoord) => {
   if(!str) return baseCoord || [0,0];
   let hash = 0;
   for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
-  
   if (baseCoord) {
-    // ±0.2 Grad (ca. 20km) Streuung, damit sie nicht exakt übereinander liegen, aber im Land bleiben!
     const offsetLon = ((Math.abs(hash) % 100) / 250) - 0.2; 
     const offsetLat = (((Math.abs(hash) >> 5) % 100) / 250) - 0.2;
     return [baseCoord[0] + offsetLon, baseCoord[1] + offsetLat];
@@ -140,110 +135,216 @@ GB,GB,England,Domestic,6800000
 US,ES,Andalusia,International,4800000
 DE,DE,Bavaria,Domestic,900000`;
 
-
-// ==========================================
-// 🔧 WÖRTERBÜCHER
-// ==========================================
 const getFlagImgHtml = (countryCode) => {
   if (!countryCode || countryCode.length !== 2) return '';
   return `<img src="https://flagcdn.com/w20/${countryCode.toLowerCase()}.png" style="width:16px; height:auto; display:inline-block; vertical-align:middle; border-radius:2px; margin-right:4px; box-shadow: 0 1px 2px rgba(0,0,0,0.2);" alt="${countryCode}" />`;
 };
 
-const COUNTRY_NAMES = { "DE": "Deutschland", "AT": "Österreich", "CH": "Schweiz", "US": "USA", "GB": "Großbritannien", "FR": "Frankreich", "ES": "Spanien", "IT": "Italien", "NL": "Niederlande", "TR": "Türkei", "AE": "Ver. Arab. Emirate", "TH": "Thailand", "SG": "Singapur", "CZ": "Tschechien", "PR": "Puerto Rico", "BB": "Barbados", "BE": "Belgien", "HU": "Ungarn", "IL": "Israel", "CA": "Kanada", "BG": "Bulgarien", "IE": "Irland", "MX": "Mexiko", "VE": "Venezuela", "MA": "Marokko", "IN": "Indien", "DZ": "Algerien", "EG": "Ägypten", "ZA": "Südafrika", "GR": "Griechenland", "CY": "Zypern", "HR": "Kroatien", "PT": "Portugal", "JP": "Japan", "BR": "Brasilien", "CN": "China", "RU": "Russland", "UA": "Ukraine", "ID": "Indonesien", "SK": "Slowakei", "PL": "Polen", "LU": "Luxemburg", "SE": "Schweden", "NO": "Norwegen", "DK": "Dänemark", "FI": "Finnland", "RO": "Rumänien", "AU": "Australien", "NZ": "Neuseeland", "AR": "Argentinien", "CL": "Chile", "CO": "Kolumbien", "VN": "Vietnam", "MY": "Malaysia", "PH": "Philippinen", "KR": "Südkorea", "EE": "Estland", "LV": "Lettland", "LT": "Litauen", "RS": "Serbien", "BA": "Bosnien und Herzegowina", "AL": "Albanien", "MD": "Moldau", "MK": "Nordmazedonien" };
-const COUNTRY_TO_CONTINENT = { "DE": "Europa", "AT": "Europa", "CH": "Europa", "GB": "Europa", "FR": "Europa", "ES": "Europa", "IT": "Europa", "NL": "Europa", "CZ": "Europa", "BE": "Europa", "HU": "Europa", "BG": "Europa", "IE": "Europa", "GR": "Europa", "CY": "Europa", "MT": "Europa", "HR": "Europa", "IS": "Europa", "NO": "Europa", "SE": "Europa", "DK": "Europa", "FI": "Europa", "PL": "Europa", "RO": "Europa", "PT": "Europa", "UA": "Europa", "LU": "Europa", "SK": "Europa", "EE": "Europa", "LV": "Europa", "LT": "Europa", "RS": "Europa", "BA": "Europa", "AL": "Europa", "MD": "Europa", "MK": "Europa", "US": "Nord- & Mittelamerika", "CA": "Nord- & Mittelamerika", "MX": "Nord- & Mittelamerika", "PR": "Nord- & Mittelamerika", "BB": "Nord- & Mittelamerika", "BR": "Südamerika", "AR": "Südamerika", "CO": "Südamerika", "CL": "Südamerika", "TH": "Asien", "SG": "Asien", "IN": "Asien", "JP": "Asien", "CN": "Asien", "RU": "Asien", "ID": "Asien", "VN": "Asien", "MY": "Asien", "PH": "Asien", "KR": "Asien", "TR": "Naher Osten", "AE": "Naher Osten", "IL": "Naher Osten", "QA": "Naher Osten", "SA": "Naher Osten", "EG": "Afrika", "ZA": "Afrika", "MA": "Afrika", "AU": "Ozeanien", "NZ": "Ozeanien" };
-
-const CITY_COORDS = { 
-  "Frankfurt": [8.6821, 50.1109], "Berlin": [13.4050, 52.5200], "Munich": [11.5820, 48.1351], 
-  "Vienna": [16.3738, 48.2082], "Zürich": [8.5417, 47.3769], "Barcelona": [2.1734, 41.3851], 
-  "London": [-0.1278, 51.5074], "Paris": [2.3522, 48.8566], "Amsterdam": [4.9041, 52.3676], 
-  "Dubai": [55.2708, 25.2048], "New York": [-74.0060, 40.7128], "Washington": [-77.0369, 38.9072], 
-  "San Juan": [-66.1057, 18.4655], "Prague": [14.4378, 50.0755], "İstanbul": [28.9784, 41.0082], 
-  "Bridgetown": [-59.6167, 13.0968], "Brussels": [4.3517, 50.8503], "Milan": [9.1900, 45.4642], 
-  "Budapest": [19.0402, 47.4979], "Bilbao": [-2.9350, 43.2630], "Tel Aviv-Yafo": [34.8000, 32.0833], 
-  "Bangkok": [100.5018, 13.7563], "Palma de Mallorca": [2.6502, 39.5696], "Madrid": [-3.7038, 40.4168], 
-  "Lisbon": [-9.1393, 38.7223], "Rome": [12.4964, 41.9028], "Dublin": [-6.2603, 53.3498], 
-  "Athens": [23.7275, 37.9838], "Copenhagen": [12.5683, 55.6761], "Oslo": [10.7522, 59.9139], 
-  "Stockholm": [18.0686, 59.3293], "Helsinki": [24.9384, 60.1695], "Warsaw": [21.0122, 52.2297], 
-  "Reykjavik": [-21.8277, 64.1283], "Geneva": [6.1432, 46.2044], "Hamburg": [9.9937, 53.5511], 
-  "Düsseldorf": [6.7735, 51.2277], "Stuttgart": [9.1829, 48.7758], "Cologne": [6.9528, 50.9364], 
-  "Miami": [-80.1918, 25.7617], "Los Angeles": [-118.2437, 34.0522], "San Francisco": [-122.4194, 37.7749], 
-  "Chicago": [-87.6298, 41.8781], "Boston": [-71.0589, 42.3601], "Las Vegas": [-115.1398, 36.1699], 
-  "Orlando": [-81.3792, 28.5383], "Seattle": [-122.3321, 47.6062], "Atlanta": [-84.3880, 33.7490], 
-  "Toronto": [-79.3832, 43.6532], "Montreal": [-73.5673, 45.5017], "Vancouver": [-123.1207, 49.2827], 
-  "Cancun": [-86.8515, 21.1619], "Cancún": [-86.8515, 21.1619], "Tenerife": [-16.2518, 28.2916], 
-  "Gran Canaria": [-15.5474, 27.9202], "Ibiza": [1.4330, 38.9067], "Faro": [-7.9304, 37.0194], 
-  "Madeira": [-16.9081, 32.6496], "Antalya": [30.7133, 36.8969], "Málaga": [-4.4203, 36.7213], 
-  "Malaga": [-4.4203, 36.7213], "Alicante": [-0.4815, 38.3452], "Valencia": [-0.3763, 39.4699], 
-  "Naples": [14.2681, 40.8518], "Venice": [12.3155, 45.4408], "Porto": [-8.6291, 41.1579], 
-  "Edinburgh": [-3.1883, 55.9533], "Manchester": [-2.2426, 53.4808], "Birmingham": [-1.8904, 52.4862], 
-  "Glasgow": [-4.2518, 55.8642], "Belfast": [-5.9301, 54.5973], "Catania": [15.0873, 37.5079], 
-  "Palermo": [13.3613, 38.1157], "Bucharest": [26.1025, 44.4268], "Sofia": [23.3219, 42.6977], 
-  "Belgrade": [20.4489, 44.8125], "Zagreb": [15.9819, 45.8150], "Split": [16.4402, 43.5081], 
-  "Krakow": [19.9450, 50.0647], "Riga": [24.1052, 56.9496], "Tallinn": [24.7536, 59.4370], 
-  "Vilnius": [25.2797, 54.6872], "Larnaca": [33.6292, 34.9153], "Paphos": [32.4245, 34.7720], 
-  "Valletta": [14.5146, 35.8989], "Rhodes": [28.2225, 36.4341], "Heraklion": [25.1320, 35.3288], 
-  "Corfu": [19.9197, 39.6243], "Thessaloniki": [22.9444, 40.6401], "Pristina": [21.1655, 42.6629], 
-  "Tirana": [19.8189, 41.3275], "Sarajevo": [18.4131, 43.8563], "Ljubljana": [14.5058, 46.0569], 
-  "Bratislava": [17.1077, 48.1486], "Nice": [7.2620, 43.7102], "Lyon": [4.8357, 45.7640], 
-  "Marseille": [5.3698, 43.2965], "Toulouse": [1.4442, 43.6047], "Bordeaux": [-0.5792, 44.8378], 
-  "Nantes": [-1.5536, 47.2184], "Strasbourg": [7.7521, 48.5734], "Lille": [3.0573, 50.6292], 
-  "Bologna": [11.3426, 44.4949], "Florence": [11.2558, 43.7696], "Genoa": [8.9463, 44.4056], 
-  "Turin": [7.6869, 45.0703], "Pisa": [11.2558, 43.7167], "Verona": [12.3155, 45.4384], 
-  "Seville": [-5.9845, 37.3891], "Zaragoza": [-0.8810, 41.6488], "Reykjavík": [-21.8277, 64.1283], 
-  "Girona": [1.2546, 41.9794], "Menorca": [4.0204, 39.9496], "Lanzarote": [-15.5474, 27.9202], 
-  "Fuerteventura": [-14.0116, 28.3587], "Chania": [25.0203, 35.5138], "Kefalonia": [19.9197, 39.6243], 
-  "Santorini": [28.2225, 36.4341], "Mykonos": [25.3289, 36.4408], "Zakynthos": [20.8833, 37.7833], 
-  "Bodrum": [27.4296, 37.0344], "Dalaman": [30.7133, 36.7648], "Izmir": [27.1428, 38.4237], 
-  "Ankara": [32.8597, 39.9334], "Hanover": [9.7320, 52.3705], "Leipzig": [12.3731, 51.3397], 
-  "Dresden": [13.7373, 51.0504], "Nuremberg": [11.0767, 49.4521], "Graz": [15.4395, 47.0707], 
-  "Innsbruck": [13.0440, 47.2692], "Basel": [8.5417, 47.5596], "Bern": [7.5886, 47.5596], 
-  "Lugano": [8.9511, 46.0037], "Gothenburg": [11.9746, 57.7089], "Malmö": [11.9746, 55.6049], 
-  "Bergen": [5.3221, 60.3913], "Stavanger": [5.3221, 58.9699], "Tromsø": [18.9553, 69.6492], 
-  "Aarhus": [10.2039, 56.1567], "Aalborg": [10.2039, 57.0488], "Billund": [9.9187, 55.7316], 
-  "Turku": [22.2666, 60.4518], "Tampere": [23.7600, 61.4978], "Oulu": [9.9187, 65.0121], 
-  "Rovaniemi": [25.4682, 65.5000], "Skopje": [21.4280, 42.0050], "Podgorica": [19.2636, 42.4411], 
-  "Chisinau": [28.8303, 47.0105], "Cluj-Napoca": [23.5900, 46.7712], "Timisoara": [23.5900, 45.7489], 
-  "Iasi": [27.5689, 47.1585], "Varna": [27.9147, 43.2141], "Burgas": [27.9147, 42.5048], 
-  "Plovdiv": [27.4626, 42.1354], "Ohrid": [20.8016, 41.1130], "Salzburg": [13.0550, 47.8095], 
-  "Vorarlberg": [9.9065, 47.2304], "Dubrovnik": [18.0944, 42.6507], "Liberec": [15.0562, 50.7671]
+// MASSIVES GLOBALES LÄNDER UPDATE
+const COUNTRY_NAMES = {
+  "DE": "Deutschland", "AT": "Österreich", "CH": "Schweiz", "US": "USA", "GB": "Großbritannien",
+  "FR": "Frankreich", "ES": "Spanien", "IT": "Italien", "NL": "Niederlande", "TR": "Türkei",
+  "AE": "Ver. Arab. Emirate", "TH": "Thailand", "SG": "Singapur", "CZ": "Tschechien",
+  "PR": "Puerto Rico", "BB": "Barbados", "BE": "Belgien", "HU": "Ungarn", "IL": "Israel",
+  "CA": "Kanada", "BG": "Bulgarien", "IE": "Irland", "MX": "Mexiko", "VE": "Venezuela",
+  "MA": "Marokko", "IN": "Indien", "DZ": "Algerien", "EG": "Ägypten", "ZA": "Südafrika",
+  "GR": "Griechenland", "CY": "Zypern", "HR": "Kroatien", "PT": "Portugal", "JP": "Japan",
+  "BR": "Brasilien", "CN": "China", "RU": "Russland", "UA": "Ukraine", "ID": "Indonesien",
+  "SK": "Slowakei", "PL": "Polen", "LU": "Luxemburg", "SE": "Schweden", "NO": "Norwegen",
+  "DK": "Dänemark", "FI": "Finnland", "RO": "Rumänien", "AU": "Australien", "NZ": "Neuseeland",
+  "AR": "Argentinien", "CL": "Chile", "CO": "Kolumbien", "VN": "Vietnam", "MY": "Malaysia",
+  "PH": "Philippinen", "KR": "Südkorea", "EE": "Estland", "LV": "Lettland", "LT": "Litauen",
+  "RS": "Serbien", "BA": "Bosnien und Herzegowina", "AL": "Albanien", "MD": "Moldau", "MK": "Nordmazedonien",
+  "HK": "Hongkong", "TW": "Taiwan", "MO": "Macau", "DO": "Dominik. Rep.", "JM": "Jamaika",
+  "BS": "Bahamas", "CR": "Costa Rica", "PE": "Peru", "EC": "Ecuador", "BO": "Bolivien",
+  "PY": "Paraguay", "UY": "Uruguay", "QA": "Katar", "KW": "Kuwait", "BH": "Bahrain",
+  "JO": "Jordanien", "LB": "Libanon", "SY": "Syrien", "IQ": "Irak", "AF": "Afghanistan",
+  "PK": "Pakistan", "BD": "Bangladesch", "LK": "Sri Lanka", "MV": "Malediven", "NP": "Nepal",
+  "MM": "Myanmar", "KH": "Kambodscha", "LA": "Laos", "FJ": "Fidschi", "WS": "Samoa",
+  "VU": "Vanuatu", "SB": "Salomonen", "TZ": "Tansania", "UG": "Uganda", "GH": "Ghana",
+  "CI": "Elfenbeinküste", "AO": "Angola", "MZ": "Mosambik", "MG": "Madagaskar", "TN": "Tunesien",
+  "SD": "Sudan", "SA": "Saudi-Arabien", "KE": "Kenia", "NG": "Nigeria", "SN": "Senegal",
+  "CU": "Kuba", "PA": "Panama", "GU": "Guam", "VI": "Jungferninseln", "BM": "Bermuda",
+  "KY": "Kaimaninseln", "TC": "Turks- & Caicosinseln", "AW": "Aruba", "CW": "Curaçao",
+  "SX": "Sint Maarten", "IS": "Island", "OM": "Oman", "AG": "Antigua & Barbuda", "SV": "El Salvador",
+  "NI": "Nicaragua", "LY": "Libyen", "DJ": "Dschibuti", "IR": "Iran", "TJ": "Tadschikistan",
+  "BW": "Botswana", "NR": "Nauru", "FM": "Mikronesien", "KP": "Nordkorea", "PG": "Papua-Neuguinea"
 };
 
-const COUNTRY_CENTER_COORDS = { "US": [-95.71, 37.09], "GB": [-3.43, 55.37], "IN": [78.96, 20.59], "BR": [-51.92, -14.23], "JP": [138.25, 36.20], "CA": [-106.34, 56.13], "FR": [2.21, 46.22], "ES": [-3.74, 40.46], "DE": [10.45, 51.16], "IT": [12.56, 41.87], "CH": [8.22, 46.81], "AT": [14.55, 47.51], "NL": [5.29, 52.13], "AE": [53.84, 23.68], "HR": [15.20, 45.10], "PT": [-8.22, 39.39], "BG": [25.48, 42.73], "UA": [31.16, 48.37], "ID": [113.92, -0.78], "EG": [30.80, 26.82], "BE": [4.4699, 50.5039], "CZ": [15.4730, 49.8175], "SK": [19.6990, 48.6690], "PL": [19.1451, 51.9194], "HU": [19.5033, 47.1625], "LU": [6.1296, 49.8153], "SE": [18.0686, 59.3293], "NO": [10.7522, 59.9139], "DK": [9.5018, 56.2639], "FI": [25.7482, 61.9241], "IE": [-8.2439, 53.4129], "GR": [21.8243, 39.0742], "RO": [24.9668, 45.9432], "TR": [35.2433, 38.9637], "ZA": [22.9375, -30.5595], "AU": [133.7751, -25.2744], "NZ": [174.8860, -40.9006], "AR": [-63.6167, -38.4161], "CL": [-71.5430, -35.6751], "CO": [-74.2973, 4.5709], "MX": [-102.5528, 23.6345], "VN": [108.2772, 14.0583], "MY": [101.9758, 4.2105], "PH": [121.7740, 12.8797], "SG": [103.8198, 1.3521], "TH": [100.9925, 15.8700], "KR": [127.7669, 35.9078], "IL": [34.8516, 31.0461], "EE": [25.0136, 58.5953], "LV": [24.6032, 56.8796], "LT": [23.8813, 55.1694], "IS": [-19.0208, 64.9631], "PA": [-80.7821, 8.5380], "OM": [55.9233, 21.5126], "AG": [-61.7964, 17.0608], "SV": [-88.8965, 13.7942], "NI": [-85.2072, 12.8654], "KE": [37.9062, -0.0236], "SN": [-14.4524, 14.4974], "DZ": [1.6596, 28.0339], "LY": [17.2283, 26.3351], "DJ": [42.5903, 11.8251], "IR": [53.6880, 32.4279], "TJ": [71.2761, 38.8610], "BW": [24.6849, -22.3285], "NR": [166.9315, -0.5228], "FM": [158.1499, 7.4256], "KP": [127.5101, 40.3399], "CU": [-77.7812, 21.5218], "NG": [8.6753, 9.0820], "PG": [143.9555, -6.3150], "RS": [21.0059, 44.0165], "BA": [17.6791, 43.9159], "AL": [20.1683, 41.1533], "MD": [28.3699, 47.4116], "MK": [21.7453, 41.6086] };
+const COUNTRY_TO_CONTINENT = {
+  "DE": "Europa", "AT": "Europa", "CH": "Europa", "GB": "Europa", "FR": "Europa", "ES": "Europa", "IT": "Europa", "NL": "Europa", "CZ": "Europa", "BE": "Europa", "HU": "Europa", "BG": "Europa", "IE": "Europa", "GR": "Europa", "CY": "Europa", "MT": "Europa", "HR": "Europa", "IS": "Europa", "NO": "Europa", "SE": "Europa", "DK": "Europa", "FI": "Europa", "PL": "Europa", "RO": "Europa", "PT": "Europa", "UA": "Europa", "LU": "Europa", "SK": "Europa", "EE": "Europa", "LV": "Europa", "LT": "Europa", "RS": "Europa", "BA": "Europa", "AL": "Europa", "MD": "Europa", "MK": "Europa",
+  "US": "Nord- & Mittelamerika", "CA": "Nord- & Mittelamerika", "MX": "Nord- & Mittelamerika", "PR": "Nord- & Mittelamerika", "BB": "Nord- & Mittelamerika", "DO": "Nord- & Mittelamerika", "JM": "Nord- & Mittelamerika", "BS": "Nord- & Mittelamerika", "CR": "Nord- & Mittelamerika", "CU": "Nord- & Mittelamerika", "PA": "Nord- & Mittelamerika",
+  "BR": "Südamerika", "AR": "Südamerika", "CO": "Südamerika", "CL": "Südamerika", "PE": "Südamerika", "VE": "Südamerika", "EC": "Südamerika", "BO": "Südamerika", "PY": "Südamerika", "UY": "Südamerika",
+  "TH": "Asien", "SG": "Asien", "IN": "Asien", "JP": "Asien", "CN": "Asien", "RU": "Asien", "ID": "Asien", "VN": "Asien", "MY": "Asien", "PH": "Asien", "KR": "Asien", "HK": "Asien", "TW": "Asien", "MO": "Asien", "AF": "Asien", "PK": "Asien", "BD": "Asien", "LK": "Asien", "MV": "Asien", "NP": "Asien", "MM": "Asien", "KH": "Asien", "LA": "Asien",
+  "TR": "Naher Osten", "AE": "Naher Osten", "IL": "Naher Osten", "QA": "Naher Osten", "SA": "Naher Osten", "KW": "Naher Osten", "BH": "Naher Osten", "JO": "Naher Osten", "LB": "Naher Osten", "SY": "Naher Osten", "IQ": "Naher Osten", "OM": "Naher Osten", "IR": "Naher Osten",
+  "EG": "Afrika", "ZA": "Afrika", "MA": "Afrika", "TZ": "Afrika", "UG": "Afrika", "GH": "Afrika", "CI": "Afrika", "AO": "Afrika", "MZ": "Afrika", "MG": "Afrika", "TN": "Afrika", "SD": "Afrika", "KE": "Afrika", "NG": "Afrika", "SN": "Afrika", "LY": "Afrika",
+  "AU": "Ozeanien", "NZ": "Ozeanien", "FJ": "Ozeanien", "WS": "Ozeanien", "VU": "Ozeanien", "SB": "Ozeanien"
+};
 
-// MEGA WÖRTERBUCH FÜR REGIONEN
+const CITY_COORDS = {
+  "Frankfurt": [8.6821, 50.1109], "Berlin": [13.4050, 52.5200], "Munich": [11.5820, 48.1351],
+  "Vienna": [16.3738, 48.2082], "Zürich": [8.5417, 47.3769], "Barcelona": [2.1734, 41.3851],
+  "London": [-0.1278, 51.5074], "Paris": [2.3522, 48.8566], "Amsterdam": [4.9041, 52.3676],
+  "Dubai": [55.2708, 25.2048], "New York": [-74.0060, 40.7128], "Washington": [-77.0369, 38.9072],
+  "San Juan": [-66.1057, 18.4655], "Prague": [14.4378, 50.0755], "İstanbul": [28.9784, 41.0082],
+  "Bridgetown": [-59.6167, 13.0968], "Brussels": [4.3517, 50.8503], "Milan": [9.1900, 45.4642],
+  "Budapest": [19.0402, 47.4979], "Bilbao": [-2.9350, 43.2630], "Tel Aviv-Yafo": [34.8000, 32.0833],
+  "Bangkok": [100.5018, 13.7563], "Palma de Mallorca": [2.6502, 39.5696], "Madrid": [-3.7038, 40.4168],
+  "Lisbon": [-9.1393, 38.7223], "Rome": [12.4964, 41.9028], "Dublin": [-6.2603, 53.3498],
+  "Athens": [23.7275, 37.9838], "Copenhagen": [12.5683, 55.6761], "Oslo": [10.7522, 59.9139],
+  "Stockholm": [18.0686, 59.3293], "Helsinki": [24.9384, 60.1695], "Warsaw": [21.0122, 52.2297],
+  "Reykjavik": [-21.8277, 64.1283], "Geneva": [6.1432, 46.2044], "Hamburg": [9.9937, 53.5511],
+  "Düsseldorf": [6.7735, 51.2277], "Stuttgart": [9.1829, 48.7758], "Cologne": [6.9528, 50.9364],
+  "Miami": [-80.1918, 25.7617], "Los Angeles": [-118.2437, 34.0522], "San Francisco": [-122.4194, 37.7749],
+  "Chicago": [-87.6298, 41.8781], "Boston": [-71.0589, 42.3601], "Las Vegas": [-115.1398, 36.1699],
+  "Orlando": [-81.3792, 28.5383], "Seattle": [-122.3321, 47.6062], "Atlanta": [-84.3880, 33.7490],
+  "Toronto": [-79.3832, 43.6532], "Montreal": [-73.5673, 45.5017], "Vancouver": [-123.1207, 49.2827],
+  "Cancun": [-86.8515, 21.1619], "Cancún": [-86.8515, 21.1619], "Tenerife": [-16.2518, 28.2916],
+  "Gran Canaria": [-15.5474, 27.9202], "Ibiza": [1.4330, 38.9067], "Faro": [-7.9304, 37.0194],
+  "Madeira": [-16.9081, 32.6496], "Antalya": [30.7133, 36.8969], "Málaga": [-4.4203, 36.7213],
+  "Malaga": [-4.4203, 36.7213], "Alicante": [-0.4815, 38.3452], "Valencia": [-0.3763, 39.4699],
+  "Naples": [14.2681, 40.8518], "Venice": [12.3155, 45.4408], "Porto": [-8.6291, 41.1579],
+  "Edinburgh": [-3.1883, 55.9533], "Manchester": [-2.2426, 53.4808], "Birmingham": [-1.8904, 52.4862],
+  "Glasgow": [-4.2518, 55.8642], "Belfast": [-5.9301, 54.5973], "Catania": [15.0873, 37.5079],
+  "Palermo": [13.3613, 38.1157], "Bucharest": [26.1025, 44.4268], "Sofia": [23.3219, 42.6977],
+  "Belgrade": [20.4489, 44.8125], "Zagreb": [15.9819, 45.8150], "Split": [16.4402, 43.5081],
+  "Krakow": [19.9450, 50.0647], "Riga": [24.1052, 56.9496], "Tallinn": [24.7536, 59.4370],
+  "Vilnius": [25.2797, 54.6872], "Larnaca": [33.6292, 34.9153], "Paphos": [32.4245, 34.7720],
+  "Valletta": [14.5146, 35.8989], "Rhodes": [28.2225, 36.4341], "Heraklion": [25.1320, 35.3288],
+  "Corfu": [19.9197, 39.6243], "Thessaloniki": [22.9444, 40.6401], "Pristina": [21.1655, 42.6629],
+  "Tirana": [19.8189, 41.3275], "Sarajevo": [18.4131, 43.8563], "Ljubljana": [14.5058, 46.0569],
+  "Bratislava": [17.1077, 48.1486], "Nice": [7.2620, 43.7102], "Lyon": [4.8357, 45.7640],
+  "Marseille": [5.3698, 43.2965], "Toulouse": [1.4442, 43.6047], "Bordeaux": [-0.5792, 44.8378],
+  "Nantes": [-1.5536, 47.2184], "Strasbourg": [7.7521, 48.5734], "Lille": [3.0573, 50.6292],
+  "Bologna": [11.3426, 44.4949], "Florence": [11.2558, 43.7696], "Genoa": [8.9463, 44.4056],
+  "Turin": [7.6869, 45.0703], "Pisa": [11.2558, 43.7167], "Verona": [12.3155, 45.4384],
+  "Seville": [-5.9845, 37.3891], "Zaragoza": [-0.8810, 41.6488], "Reykjavík": [-21.8277, 64.1283],
+  "Girona": [1.2546, 41.9794], "Menorca": [4.0204, 39.9496], "Lanzarote": [-15.5474, 27.9202],
+  "Fuerteventura": [-14.0116, 28.3587], "Chania": [25.0203, 35.5138], "Kefalonia": [19.9197, 39.6243],
+  "Santorini": [28.2225, 36.4341], "Mykonos": [25.3289, 36.4408], "Zakynthos": [20.8833, 37.7833],
+  "Bodrum": [27.4296, 37.0344], "Dalaman": [30.7133, 36.7648], "Izmir": [27.1428, 38.4237],
+  "Ankara": [32.8597, 39.9334], "Hanover": [9.7320, 52.3705], "Leipzig": [12.3731, 51.3397],
+  "Dresden": [13.7373, 51.0504], "Nuremberg": [11.0767, 49.4521], "Graz": [15.4395, 47.0707],
+  "Innsbruck": [13.0440, 47.2692], "Basel": [8.5417, 47.5596], "Bern": [7.5886, 47.5596],
+  "Lugano": [8.9511, 46.0037], "Gothenburg": [11.9746, 57.7089], "Malmö": [11.9746, 55.6049],
+  "Bergen": [5.3221, 60.3913], "Stavanger": [5.3221, 58.9699], "Tromsø": [18.9553, 69.6492],
+  "Aarhus": [10.2039, 56.1567], "Aalborg": [10.2039, 57.0488], "Billund": [9.9187, 55.7316],
+  "Turku": [22.2666, 60.4518], "Tampere": [23.7600, 61.4978], "Oulu": [9.9187, 65.0121],
+  "Rovaniemi": [25.4682, 65.5000], "Skopje": [21.4280, 42.0050], "Podgorica": [19.2636, 42.4411],
+  "Chisinau": [28.8303, 47.0105], "Cluj-Napoca": [23.5900, 46.7712], "Timisoara": [23.5900, 45.7489],
+  "Iasi": [27.5689, 47.1585], "Varna": [27.9147, 43.2141], "Burgas": [27.9147, 42.5048],
+  "Plovdiv": [27.4626, 42.1354], "Ohrid": [20.8016, 41.1130], "Salzburg": [13.0550, 47.8095]
+};
+
+const COUNTRY_CENTER_COORDS = {
+  "US": [-95.71, 37.09], "GB": [-3.43, 55.37], "IN": [78.96, 20.59], "BR": [-51.92, -14.23],
+  "JP": [138.25, 36.20], "CA": [-106.34, 56.13], "FR": [2.21, 46.22], "ES": [-3.74, 40.46],
+  "DE": [10.45, 51.16], "IT": [12.56, 41.87], "CH": [8.22, 46.81], "AT": [14.55, 47.51],
+  "NL": [5.29, 52.13], "AE": [53.84, 23.68], "HR": [15.20, 45.10], "PT": [-8.22, 39.39],
+  "BG": [25.48, 42.73], "UA": [31.16, 48.37], "ID": [113.92, -0.78], "EG": [30.80, 26.82],
+  "BE": [4.4699, 50.5039], "CZ": [15.4730, 49.8175], "SK": [19.6990, 48.6690], "PL": [19.1451, 51.9194],
+  "HU": [19.5033, 47.1625], "LU": [6.1296, 49.8153], "SE": [18.0686, 59.3293], "NO": [10.7522, 59.9139],
+  "DK": [9.5018, 56.2639], "FI": [25.7482, 61.9241], "IE": [-8.2439, 53.4129], "GR": [21.8243, 39.0742],
+  "RO": [24.9668, 45.9432], "TR": [35.2433, 38.9637], "ZA": [22.9375, -30.5595], "AU": [133.7751, -25.2744],
+  "NZ": [174.8860, -40.9006], "AR": [-63.6167, -38.4161], "CL": [-71.5430, -35.6751], "CO": [-74.2973, 4.5709],
+  "MX": [-102.5528, 23.6345], "VN": [108.2772, 14.0583], "MY": [101.9758, 4.2105], "PH": [121.7740, 12.8797],
+  "SG": [103.8198, 1.3521], "TH": [100.9925, 15.8700], "KR": [127.7669, 35.9078], "IL": [34.8516, 31.0461],
+  "EE": [25.0136, 58.5953], "LV": [24.6032, 56.8796], "LT": [23.8813, 55.1694], "IS": [-19.0208, 64.9631],
+  "PA": [-80.7821, 8.5380], "OM": [55.9233, 21.5126], "AG": [-61.7964, 17.0608], "SV": [-88.8965, 13.7942],
+  "NI": [-85.2072, 12.8654], "KE": [37.9062, -0.0236], "SN": [-14.4524, 14.4974], "DZ": [1.6596, 28.0339],
+  "LY": [17.2283, 26.3351], "DJ": [42.5903, 11.8251], "IR": [53.6880, 32.4279], "TJ": [71.2761, 38.8610],
+  "BW": [24.6849, -22.3285], "NR": [166.9315, -0.5228], "FM": [158.1499, 7.4256], "KP": [127.5101, 40.3399],
+  "CU": [-77.7812, 21.5218], "NG": [8.6753, 9.0820], "PG": [143.9555, -6.3150], "RS": [21.0059, 44.0165],
+  "BA": [17.6791, 43.9159], "AL": [20.1683, 41.1533], "MD": [28.3699, 47.4116], "MK": [21.7453, 41.6086],
+  "CN": [104.1954, 35.8617], "RU": [105.3188, 61.5240], "HK": [114.1095, 22.3964], "TW": [120.9605, 23.6978],
+  "MO": [113.5430, 22.1987], "PR": [-66.5901, 18.2208], "BB": [-59.5432, 13.1939], "MA": [-7.0926, 31.7917],
+  "DO": [-70.1627, 18.7357], "JM": [-77.2975, 18.1096], "BS": [-77.3963, 25.0343], "CR": [-83.7534, 9.7489],
+  "PE": [-75.0152, -9.1900], "VE": [-66.5897, 7.1322], "EC": [-78.1834, -1.8312], "BO": [-63.5887, -16.2902],
+  "PY": [-58.4438, -23.2236], "UY": [-55.7658, -32.5228], "QA": [51.1839, 25.3548], "KW": [47.4818, 29.3117],
+  "BH": [50.5577, 25.9304], "JO": [36.2384, 31.2408], "LB": [35.8623, 33.8547], "SY": [38.9968, 34.8021],
+  "IQ": [43.6793, 33.2232], "AF": [67.7100, 33.9391], "PK": [69.3451, 30.3753], "BD": [90.3563, 23.6850],
+  "LK": [80.7718, 7.8731], "MV": [73.2207, 3.2028], "NP": [84.1240, 28.3949], "MM": [95.9560, 21.9162],
+  "KH": [104.9910, 12.5657], "LA": [102.4955, 19.8563], "FJ": [179.4144, -16.5782], "WS": [-172.1046, -13.7590],
+  "VU": [167.9663, -16.2684], "SB": [160.1562, -9.6457], "TZ": [34.8888, -6.3690], "UG": [32.2903, 1.3733],
+  "GH": [-1.0232, 7.9465], "CI": [-5.5471, 7.5400], "TN": [9.5375, 33.8869], "SD": [30.2176, 12.8628],
+  "SA": [45.0792, 23.8859], "GU": [144.7937, 13.4443], "VI": [-64.8963, 18.3358], "BM": [-64.7505, 32.3078],
+  "KY": [-80.5669, 19.3220], "TC": [-71.7979, 21.6940], "AW": [-69.9683, 12.5211], "CW": [-68.9333, 12.1696],
+  "SX": [-63.0501, 18.0425], "AO": [17.8739, -11.2027], "MZ": [35.5296, -18.6657], "MG": [46.8691, -18.7669]
+};
+
 const REGION_COORDS = {
-  // US States
-  "California": [-121.4944, 38.5816], "Texas": [-97.7431, 30.2672], "Florida": [-84.2807, 30.4383], "New York": [-73.7562, 42.6526], "Pennsylvania": [-76.8836, 40.2732], "Illinois": [-89.6501, 39.7817], "Ohio": [-82.9988, 39.9612], "Georgia": [-84.3880, 33.7490], "North Carolina": [-78.6382, 35.7796], "Michigan": [-84.5555, 42.7325], "New Jersey": [-74.7597, 40.2171], "Virginia": [-77.4360, 37.5407], "Washington": [-122.9007, 47.0379], "Arizona": [-112.0740, 33.4484], "Massachusetts": [-71.0589, 42.3601], "Tennessee": [-86.7816, 36.1627], "Indiana": [-86.1581, 39.7684], "Missouri": [-92.1735, 38.5767], "Maryland": [-76.4922, 38.9784], "Wisconsin": [-89.3842, 43.0731], "Colorado": [-104.9903, 39.7392], "Minnesota": [-93.1015, 44.9537], "South Carolina": [-81.0348, 34.0007], "Alabama": [-86.3006, 32.3668], "Louisiana": [-91.1403, 30.4515], "Kentucky": [-84.8733, 38.2009], "Oregon": [-123.0351, 44.9429], "Oklahoma": [-97.5164, 35.4676], "Connecticut": [-72.6851, 41.7658], "Utah": [-111.8910, 40.7608], "Iowa": [-93.6091, 41.5908], "Nevada": [-119.7674, 39.1638], "Arkansas": [-92.2896, 34.7465], "Mississippi": [-90.1848, 32.2988], "Kansas": [-95.6890, 39.0558], "New Mexico": [-105.9378, 35.6870], "Nebraska": [-96.6753, 40.8136], "Idaho": [-116.2023, 43.6150], "West Virginia": [-81.6326, 38.3498], "Hawaii": [-157.8583, 21.3069],
-  // Canada Provinces
+  "California": [-121.4944, 38.5816], "Texas": [-97.7431, 30.2672], "Florida": [-84.2807, 30.4383], "New York": [-73.7562, 42.6526],
+  "Pennsylvania": [-76.8836, 40.2732], "Illinois": [-89.6501, 39.7817], "Ohio": [-82.9988, 39.9612], "Georgia": [-84.3880, 33.7490],
+  "North Carolina": [-78.6382, 35.7796], "Michigan": [-84.5555, 42.7325], "New Jersey": [-74.7597, 40.2171], "Virginia": [-77.4360, 37.5407],
+  "Washington": [-122.9007, 47.0379], "Arizona": [-112.0740, 33.4484], "Massachusetts": [-71.0589, 42.3601], "Tennessee": [-86.7816, 36.1627],
+  "Indiana": [-86.1581, 39.7684], "Missouri": [-92.1735, 38.5767], "Maryland": [-76.4922, 38.9784], "Wisconsin": [-89.3842, 43.0731],
+  "Colorado": [-104.9903, 39.7392], "Minnesota": [-93.1015, 44.9537], "South Carolina": [-81.0348, 34.0007], "Alabama": [-86.3006, 32.3668],
+  "Louisiana": [-91.1403, 30.4515], "Kentucky": [-84.8733, 38.2009], "Oregon": [-123.0351, 44.9429], "Oklahoma": [-97.5164, 35.4676],
+  "Connecticut": [-72.6851, 41.7658], "Utah": [-111.8910, 40.7608], "Iowa": [-93.6091, 41.5908], "Nevada": [-119.7674, 39.1638],
+  "Arkansas": [-92.2896, 34.7465], "Mississippi": [-90.1848, 32.2988], "Kansas": [-95.6890, 39.0558], "New Mexico": [-105.9378, 35.6870],
+  "Nebraska": [-96.6753, 40.8136], "Idaho": [-116.2023, 43.6150], "West Virginia": [-81.6326, 38.3498], "Hawaii": [-157.8583, 21.3069],
   "Ontario": [-79.3832, 43.6532], "Quebec": [-71.2080, 46.8139], "British Columbia": [-123.3656, 48.4284], "Alberta": [-113.4909, 53.5461],
-  // UK
   "England": [-0.1276, 51.5072], "Scotland": [-3.1883, 55.9533], "Wales": [-3.1791, 51.4816], "Northern Ireland": [-5.9301, 54.5973],
-  // Germany
-  "Bavaria": [11.5820, 48.1351], "North Rhine-Westphalia": [6.7735, 51.2277], "Baden-Württemberg": [9.1829, 48.7758], "Hesse": [8.2415, 50.0826], "Lower Saxony": [9.7320, 52.3705], "Rhineland-Palatinate": [8.2473, 49.9929], "Berlin": [13.4050, 52.5200], "Saxony": [13.7373, 51.0504], "Hamburg": [9.9937, 53.5511], "Schleswig-Holstein": [10.1228, 54.3233], "Brandenburg": [13.0645, 52.3906], "Saxony-Anhalt": [11.6276, 52.1205], "Thuringia": [11.0299, 50.9804], "Mecklenburg-Vorpommern": [11.4148, 53.6355], "Bremen": [8.8017, 53.0793], "Saarland": [6.9969, 49.2390],
-  // Spain
-  "Andalusia": [-5.9845, 37.3891], "Catalonia": [2.1686, 41.3874], "Madrid": [-3.7038, 40.4168], "Valencian Community": [-0.3763, 39.4699], "Galicia": [-8.5457, 42.8782], "Castile and León": [-4.7245, 41.6520], "Basque Country": [-2.9350, 43.2630], "Canary Islands": [-15.4134, 28.1174], "Castilla-La Mancha": [-4.0273, 39.8628], "Murcia": [-1.1307, 37.9922], "Aragon": [-0.8810, 41.6488], "Extremadura": [-6.3408, 38.9161], "Balearic Islands": [2.6502, 39.5696], "Asturias": [-5.8494, 43.3614], "Navarre": [-1.6432, 42.8169], "Cantabria": [-3.8044, 43.4623], "La Rioja": [-2.4437, 42.4627],
-  // France
-  "Île-de-France": [2.3522, 48.8566], "Auvergne-Rhône-Alpes": [4.8357, 45.7640], "Nouvelle-Aquitaine": [-0.5792, 44.8378], "Occitanie": [1.4442, 43.6047], "Hauts-de-France": [3.0573, 50.6292], "Provence-Alpes-Côte d'Azur": [5.3698, 43.2965], "Grand Est": [7.7521, 48.5734], "Pays de la Loire": [-1.5536, 47.2184], "Brittany": [-1.6778, 48.1147], "Normandy": [-0.3600, 49.1800], "Bourgogne-Franche-Comté": [5.0415, 47.3220], "Centre-Val de Loire": [1.9093, 47.9029], "Corsica": [8.7369, 41.9271],
-  // Italy
-  "Lombardy": [9.1900, 45.4642], "Lazio": [12.4964, 41.9028], "Campania": [14.2681, 40.8518], "Sicily": [13.3614, 38.1157], "Veneto": [12.3155, 45.4408], "Emilia-Romagna": [11.3426, 44.4949], "Piedmont": [7.6869, 45.0703], "Apulia": [16.8719, 41.1171], "Tuscany": [11.2558, 43.7696], "Calabria": [16.5944, 38.9059], "Sardinia": [9.1114, 39.2153], "Liguria": [8.9463, 44.4056], "Marche": [13.5189, 43.6158], "Abruzzo": [13.3995, 42.3498], "Friuli-Venezia Giulia": [13.7768, 45.6495], "Trentino-South Tyrol": [11.1211, 46.0697], "Umbria": [12.3888, 43.1107], "Basilicata": [15.8051, 40.6404], "Molise": [14.6627, 41.5603], "Aosta Valley": [7.3201, 45.7373],
-  // Greece (Neu)
-  "South Aegean": [25.3289, 36.4408], "Crete": [24.8093, 35.2401], "Ionian Islands": [20.6249, 38.9954], "Central Macedonia": [22.9444, 40.6401], "Attica": [23.7275, 37.9838], "Peloponnese": [22.3815, 37.6664], "Epirus": [20.8450, 39.6649], "Thessaly": [22.4223, 39.5517], "Macedonia and Thrace": [22.9444, 40.6401], "Central Greece": [22.8465, 38.6120], "Western Greece": [21.7346, 38.2466], "Eastern Macedonia and Thrace": [24.8988, 41.0858], "North Aegean": [26.2307, 39.1118], "Decentralized Administration of Peloponnese, Western Greece and the Ionian": [21.7346, 38.2466], "Decentralized Administration of the Aegean": [25.3289, 36.4408], "Decentralized Administration of Crete": [24.8093, 35.2401],
-  // Turkey (Neu)
-  "Antalya Province": [30.7133, 36.8969], "Antalya": [30.7133, 36.8969], "Muğla Province": [28.3665, 37.2153], "Mugla Province": [28.3665, 37.2153], "Muğla": [28.3665, 37.2153], "Istanbul Province": [28.9784, 41.0082], "Istanbul": [28.9784, 41.0082], "İzmir Province": [27.1428, 38.4237], "Izmir Province": [27.1428, 38.4237], "İzmir": [27.1428, 38.4237], "Aydın Province": [27.8456, 37.8444], "Aydin Province": [27.8456, 37.8444], "Aydın": [27.8456, 37.8444], "Nevşehir Province": [34.7142, 38.6247], "Marmara Region": [28.9784, 41.0082], "Aegean Region": [27.1428, 38.4237], "Mediterranean Region": [30.7133, 36.8969],
-  // Others / International Tests
-  "Tessin": [8.96, 46.20], "Ticino": [8.96, 46.20], "Vorarlberg": [9.9065, 47.2304], "Salzburg": [13.0550, 47.8095], "Dubrovnik": [18.0944, 42.6507], "Liberec": [15.0562, 50.7671]
+  "Bavaria": [11.5820, 48.1351], "North Rhine-Westphalia": [6.7735, 51.2277], "Baden-Württemberg": [9.1829, 48.7758], "Hesse": [8.2415, 50.0826],
+  "Lower Saxony": [9.7320, 52.3705], "Rhineland-Palatinate": [8.2473, 49.9929], "Berlin": [13.4050, 52.5200], "Saxony": [13.7373, 51.0504],
+  "Hamburg": [9.9937, 53.5511], "Schleswig-Holstein": [10.1228, 54.3233], "Brandenburg": [13.0645, 52.3906], "Saxony-Anhalt": [11.6276, 52.1205],
+  "Thuringia": [11.0299, 50.9804], "Mecklenburg-Vorpommern": [11.4148, 53.6355], "Bremen": [8.8017, 53.0793], "Saarland": [6.9969, 49.2390],
+  "Andalusia": [-5.9845, 37.3891], "Catalonia": [2.1686, 41.3874], "Madrid": [-3.7038, 40.4168], "Valencian Community": [-0.3763, 39.4699],
+  "Galicia": [-8.5457, 42.8782], "Castile and León": [-4.7245, 41.6520], "Basque Country": [-2.9350, 43.2630], "Canary Islands": [-15.4134, 28.1174],
+  "Castilla-La Mancha": [-4.0273, 39.8628], "Murcia": [-1.1307, 37.9922], "Aragon": [-0.8810, 41.6488], "Extremadura": [-6.3408, 38.9161],
+  "Balearic Islands": [2.6502, 39.5696], "Asturias": [-5.8494, 43.3614], "Navarre": [-1.6432, 42.8169], "Cantabria": [-3.8044, 43.4623], "La Rioja": [-2.4437, 42.4627],
+  "Île-de-France": [2.3522, 48.8566], "Auvergne-Rhône-Alpes": [4.8357, 45.7640], "Nouvelle-Aquitaine": [-0.5792, 44.8378], "Occitanie": [1.4442, 43.6047],
+  "Hauts-de-France": [3.0573, 50.6292], "Provence-Alpes-Côte d'Azur": [5.3698, 43.2965], "Grand Est": [7.7521, 48.5734], "Pays de la Loire": [-1.5536, 47.2184],
+  "Brittany": [-1.6778, 48.1147], "Normandy": [-0.3600, 49.1800], "Bourgogne-Franche-Comté": [5.0415, 47.3220], "Centre-Val de Loire": [1.9093, 47.9029], "Corsica": [8.7369, 41.9271],
+  "Lombardy": [9.1900, 45.4642], "Lazio": [12.4964, 41.9028], "Campania": [14.2681, 40.8518], "Sicily": [13.3614, 38.1157], "Veneto": [12.3155, 45.4408],
+  "Emilia-Romagna": [11.3426, 44.4949], "Piedmont": [7.6869, 45.0703], "Apulia": [16.8719, 41.1171], "Tuscany": [11.2558, 43.7696], "Calabria": [16.5944, 38.9059],
+  "Sardinia": [9.1114, 39.2153], "Liguria": [8.9463, 44.4056], "Marche": [13.5189, 43.6158], "Abruzzo": [13.3995, 42.3498], "Friuli-Venezia Giulia": [13.7768, 45.6495],
+  "Trentino-South Tyrol": [11.1211, 46.0697], "Umbria": [12.3888, 43.1107], "Basilicata": [15.8051, 40.6404], "Molise": [14.6627, 41.5603], "Aosta Valley": [7.3201, 45.7373],
+  "South Aegean": [25.3289, 36.4408], "Crete": [24.8093, 35.2401], "Ionian Islands": [20.6249, 38.9954], "Central Macedonia": [22.9444, 40.6401], "Attica": [23.7275, 37.9838],
+  "Peloponnese": [22.3815, 37.6664], "Epirus": [20.8450, 39.6649], "Thessaly": [22.4223, 39.5517], "Macedonia and Thrace": [22.9444, 40.6401], "Central Greece": [22.8465, 38.6120],
+  "Western Greece": [21.7346, 38.2466], "Eastern Macedonia and Thrace": [24.8988, 41.0858], "North Aegean": [26.2307, 39.1118], "Decentralized Administration of Peloponnese, Western Greece and the Ionian": [21.7346, 38.2466],
+  "Decentralized Administration of the Aegean": [25.3289, 36.4408], "Decentralized Administration of Crete": [24.8093, 35.2401],
+  "Antalya Province": [30.7133, 36.8969], "Antalya": [30.7133, 36.8969], "Muğla Province": [28.3665, 37.2153], "Mugla Province": [28.3665, 37.2153], "Muğla": [28.3665, 37.2153],
+  "Istanbul Province": [28.9784, 41.0082], "Istanbul": [28.9784, 41.0082], "İzmir Province": [27.1428, 38.4237], "Izmir Province": [27.1428, 38.4237], "İzmir": [27.1428, 38.4237],
+  "Aydın Province": [27.8456, 37.8444], "Aydin Province": [27.8456, 37.8444], "Aydın": [27.8456, 37.8444], "Nevşehir Province": [34.7142, 38.6247], "Marmara Region": [28.9784, 41.0082],
+  "Aegean Region": [27.1428, 38.4237], "Mediterranean Region": [30.7133, 36.8969],
+  "Tessin": [8.96, 46.20], "Ticino": [8.96, 46.20], "Vorarlberg": [9.9065, 47.2304], "Salzburg": [13.0550, 47.8095], "Dubrovnik": [18.0944, 42.6507], "Liberec": [15.0562, 50.7671], "Trentino-Alto Adige": [11.1211, 46.0697], "Trentino Alto Adige": [11.1211, 46.0697]
 };
 
 const PLANE_PATH = 'path://M1705.06,1318.313v-89.254l-319.9-221.799l0.073-208.063c0.521-84.662-26.629-121.796-63.961-121.491c-37.332-0.305-64.482,36.829-63.961,121.491l0.073,208.063l-319.9,221.799v89.254l330.343-157.288l12.238,241.308l-134.449,92.931l0.531,42.034l175.125-42.917l175.125,42.917l0.531-42.034l-134.449-92.931l12.238-241.308L1705.06,1318.313z';
 
-
 export default function App() {
   const [activeTab, setActiveTab] = useState('flights'); 
 
-  // --- UI & FIREBASE STATES ---
+  // --- UI STATES ---
   const [echartsReady, setEchartsReady] = useState(false);
-  const [user, setUser] = useState(null);
-  
+  const [isProModalOpen, setIsProModalOpen] = useState(false);
+  const chartRef = useRef(null);
+  const chartInstance = useRef(null);
+
+  // --- STATE FLÜGE ---
+  const [isDefaultDataFlights, setIsDefaultDataFlights] = useState(true);
+  const [isFlightFiltersInitialized, setIsFlightFiltersInitialized] = useState(false);
+  const [customFlightDate, setCustomFlightDate] = useState("");
+  const [data, setData] = useState([]);
+  const [disabledRoutes, setDisabledRoutes] = useState([]);
+  const [availableCountries, setAvailableCountries] = useState([]);
+  const [activeCountries, setActiveCountries] = useState([]);
+  const [availableDestCountries, setAvailableDestCountries] = useState([]);
+  const [activeDestCountries, setActiveDestCountries] = useState([]);
+  const [timeframe, setTimeframe] = useState('7d'); 
+  const [trendType, setTrendType] = useState('yoy'); 
+  const [trendFilter, setTrendFilter] = useState('all'); 
+  const [minAdOppFilter, setMinAdOppFilter] = useState(''); 
+  const [isDestExpanded, setIsDestExpanded] = useState(false);
+
+  // --- STATE UNTERKÜNFTE ---
+  const [isDefaultDataAcc, setIsDefaultDataAcc] = useState(true);
+  const [isAccFiltersInitialized, setIsAccFiltersInitialized] = useState(false);
+  const [customAccDate, setCustomAccDate] = useState("");
+  const [accData, setAccData] = useState([]);
+  const [accFilterType, setAccFilterType] = useState('All');
+
   // --- ADMIN PANEL STATES ---
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -264,25 +365,8 @@ export default function App() {
   const [adminAccCurrCsv2, setAdminAccCurrCsv2] = useState(null);
   const [adminAccPrevCsv2, setAdminAccPrevCsv2] = useState(null);
   
-  // --- STATE FLÜGE ---
   const [flightsGlobalDate, setFlightsGlobalDate] = useState("Lade Daten...");
   const [flightsGlobalCsv, setFlightsGlobalCsv] = useState("");
-  const [isDefaultDataFlights, setIsDefaultDataFlights] = useState(true);
-  const [customFlightDate, setCustomFlightDate] = useState("");
-  
-  const [data, setData] = useState([]);
-  const [disabledRoutes, setDisabledRoutes] = useState([]);
-  const [availableCountries, setAvailableCountries] = useState([]);
-  const [activeCountries, setActiveCountries] = useState([]);
-  const [availableDestCountries, setAvailableDestCountries] = useState([]);
-  const [activeDestCountries, setActiveDestCountries] = useState([]);
-  const [timeframe, setTimeframe] = useState('7d'); 
-  const [trendType, setTrendType] = useState('yoy'); 
-  const [trendFilter, setTrendFilter] = useState('all'); 
-  const [minAdOppFilter, setMinAdOppFilter] = useState(''); 
-  const [isDestExpanded, setIsDestExpanded] = useState(false);
-
-  // --- STATE UNTERKÜNFTE ---
   const [accGlobalDate, setAccGlobalDate] = useState("Lade Daten...");
   const [accGlobalCurrCsv, setAccGlobalCurrCsv] = useState("");
   const [accGlobalPrevCsv, setAccGlobalPrevCsv] = useState("");
@@ -291,11 +375,6 @@ export default function App() {
   const [accGlobalPrevCsv2, setAccGlobalPrevCsv2] = useState("");
   
   const [accTimeframe, setAccTimeframe] = useState('set1'); 
-  const [isDefaultDataAcc, setIsDefaultDataAcc] = useState(true);
-  const [customAccDate, setCustomAccDate] = useState("");
-  
-  const [accData, setAccData] = useState([]);
-  const [accFilterType, setAccFilterType] = useState('All');
   const [availableAccCountries, setAvailableAccCountries] = useState([]);
   const [activeAccCountries, setActiveAccCountries] = useState([]);
   const [accMinAdOppFilter, setAccMinAdOppFilter] = useState(''); 
@@ -304,9 +383,9 @@ export default function App() {
   const [activeAccRegions, setActiveAccRegions] = useState([]);
   const [regionSearch, setRegionSearch] = useState('');
   const [isRegionDropdownOpen, setIsRegionDropdownOpen] = useState(false);
+  const [expandedAccCountries, setExpandedAccCountries] = useState({});
 
-  // --- TEMP USER DIY MODAL STATES ---
-  const [isDiyModalOpen, setIsDiyModalOpen] = useState(false);
+  // --- TEMP MODAL STATES ---
   const [tempFlightFile, setTempFlightFile] = useState(null);
   const [tempFlightDate, setTempFlightDate] = useState("");
   
@@ -318,10 +397,7 @@ export default function App() {
   const [tempAccCurrent, setTempAccCurrent] = useState(null);
   const [tempAccPrevious, setTempAccPrevious] = useState(null);
 
-  const chartRef = useRef(null);
-  const chartInstance = useRef(null);
   const dropdownRef = useRef(null);
-  
   const clickCountRef = useRef(0);
   const clickTimeoutRef = useRef(null);
 
@@ -473,11 +549,9 @@ export default function App() {
            const destCountry = cols[1].trim();
            let destRegion = cols[2].trim();
            
-           // AUTO-FILTER: Ursprung EU + US/CA 
            const isOriginValid = ['US', 'CA'].includes(userCountry) || COUNTRY_TO_CONTINENT[userCountry] === 'Europa';
            if (!isOriginValid) continue;
 
-           // NEU: Destinations-Logik für "Rest of World" -> Alles wird zu Land gruppiert
            const isDestEuUsCaTr = ['US', 'CA', 'TR'].includes(destCountry) || COUNTRY_TO_CONTINENT[destCountry] === 'Europa';
            if (!isDestEuUsCaTr) {
                destRegion = COUNTRY_NAMES[destCountry] || destCountry;
@@ -511,16 +585,7 @@ export default function App() {
     return map;
   }, [accData]);
 
-  useEffect(() => {
-    const countries = [...new Set(accData.map(d => d.userCountry))].sort();
-    setAvailableAccCountries(countries);
-    setActiveAccCountries(countries);
-
-    const regions = [...new Set(accData.map(d => d.destRegion))].filter(Boolean).sort();
-    setAvailableAccRegions(regions);
-    setActiveAccRegions(regions);
-  }, [accData]);
-
+  // Initialisiere Flüge Filter
   useEffect(() => {
     if (isDefaultDataFlights && flightsGlobalCsv) {
       const parsed = parseCSV(flightsGlobalCsv);
@@ -528,14 +593,22 @@ export default function App() {
       setDisabledRoutes([]);
       const countries = [...new Set(parsed.map(d => d.originCountry))].sort();
       setAvailableCountries(countries);
-      setActiveCountries(countries);
       const destCountries = [...new Set(parsed.map(d => d.destCountry))].sort();
       setAvailableDestCountries(destCountries);
-      setActiveDestCountries(destCountries);
+      
+      if (!isFlightFiltersInitialized) {
+        setActiveCountries(countries.includes('DE') ? ['DE'] : countries);
+        const euDest = destCountries.filter(c => COUNTRY_TO_CONTINENT[c] === 'Europa');
+        setActiveDestCountries(euDest.length > 0 ? euDest : destCountries);
+        setIsFlightFiltersInitialized(true);
+      } else {
+        setActiveCountries(prev => prev.filter(c => countries.includes(c)));
+        setActiveDestCountries(prev => prev.filter(c => destCountries.includes(c)));
+      }
     }
-  }, [flightsGlobalCsv, isDefaultDataFlights]);
+  }, [flightsGlobalCsv, isDefaultDataFlights, isFlightFiltersInitialized]);
 
-  // Lädt Acc-Daten dynamisch nach dem gewählten Zeitraum (Set1 / Set2)
+  // Lade Unterkünfte je nach Zeitraum Set 1 oder 2
   useEffect(() => {
     if (isDefaultDataAcc && accGlobalCurrCsv && accGlobalPrevCsv) {
       const cCsv = accTimeframe === 'set1' ? accGlobalCurrCsv : (accGlobalCurrCsv2 || accGlobalCurrCsv);
@@ -546,8 +619,28 @@ export default function App() {
     }
   }, [accGlobalCurrCsv, accGlobalPrevCsv, accGlobalCurrCsv2, accGlobalPrevCsv2, accTimeframe, isDefaultDataAcc]);
 
-  const initDefaultFlights = () => { setIsDefaultDataFlights(true); setCustomFlightDate(""); };
-  const initDefaultAcc = () => { setIsDefaultDataAcc(true); setCustomAccDate(""); setAccTimeframe('set1'); };
+  // Initialisiere Unterkünfte Filter
+  useEffect(() => {
+    if (accData.length === 0) return;
+    const countries = [...new Set(accData.map(d => d.userCountry))].sort();
+    setAvailableAccCountries(countries);
+    const regions = [...new Set(accData.map(d => d.destRegion))].filter(Boolean).sort();
+    setAvailableAccRegions(regions);
+
+    if (!isAccFiltersInitialized) {
+      const initialCountries = countries.filter(c => ['DE', 'AT', 'CH'].includes(c));
+      setActiveAccCountries(initialCountries.length > 0 ? initialCountries : countries);
+      const initialRegions = regions.filter(r => r.toLowerCase().includes('trentino'));
+      setActiveAccRegions(initialRegions.length > 0 ? initialRegions : regions);
+      setIsAccFiltersInitialized(true);
+    } else {
+      setActiveAccCountries(prev => prev.filter(c => countries.includes(c)));
+      setActiveAccRegions(prev => prev.filter(r => regions.includes(r)));
+    }
+  }, [accData, isAccFiltersInitialized]);
+
+  const initDefaultFlights = () => { setIsDefaultDataFlights(true); setIsFlightFiltersInitialized(false); setCustomFlightDate(""); };
+  const initDefaultAcc = () => { setIsDefaultDataAcc(true); setIsAccFiltersInitialized(false); setCustomAccDate(""); setAccTimeframe('set1'); };
 
 
   // ==========================================
@@ -600,15 +693,9 @@ export default function App() {
     if(!tempFlightFile) return;
     const text = await tempFlightFile.text();
     setIsDefaultDataFlights(false);
+    setIsFlightFiltersInitialized(false);
     setCustomFlightDate(formatD(tempFlightDate) || "Manuelles Datum");
-    const parsed = parseCSV(text);
-    setData(parsed);
-    const countries = [...new Set(parsed.map(d => d.originCountry))].sort();
-    setAvailableCountries(countries);
-    setActiveCountries(countries);
-    const destCountries = [...new Set(parsed.map(d => d.destCountry))].sort();
-    setAvailableDestCountries(destCountries);
-    setActiveDestCountries(destCountries);
+    setFlightsGlobalCsv(text);
     setIsDiyModalOpen(false);
   };
 
@@ -625,6 +712,7 @@ export default function App() {
     setCustomAccDate(`${l1} vs ${l2}`);
     
     setIsDefaultDataAcc(false);
+    setIsAccFiltersInitialized(false);
     setIsDiyModalOpen(false);
   };
 
@@ -699,38 +787,90 @@ export default function App() {
     return groups;
   }, [filteredRegionsForSearch, regionToCountry]);
 
-  // --- ECHARTS RENDERING ---
-  useEffect(() => {
-    if (!echartsReady || !chartRef.current) return;
-    if (!chartInstance.current) chartInstance.current = window.echarts.init(chartRef.current);
+  const toggleAccCountryAccordion = (countryCode, e) => {
+    e.stopPropagation();
+    setExpandedAccCountries(prev => ({...prev, [countryCode]: !prev[countryCode]}));
+  };
 
-    let option = {};
-
-    if (activeTab === 'flights' && data.length > 0) {
-      const activeMinAdOpp = Number(minAdOppFilter) || 0;
-      const activeDataRaw = data.filter(r => !disabledRoutes.includes(r.routeId) && activeCountries.includes(r.originCountry) && activeDestCountries.includes(r.destCountry));
-      let minAd = Infinity, maxAd = -Infinity;
-
-      const currentData = activeDataRaw.map(row => {
+  // --- ZENTRALE DATEN FÜR ECHARTS & TOP 5 PANEL ---
+  const flightChartData = useMemo(() => {
+    if (activeTab !== 'flights') return [];
+    const activeMinAdOpp = Number(minAdOppFilter) || 0;
+    return data.filter(r => !disabledRoutes.includes(r.routeId) && activeCountries.includes(r.originCountry) && activeDestCountries.includes(r.destCountry))
+      .map(row => {
         let adOpp, trend, trendLabel;
         if (timeframe === '84d') { adOpp = row.d84_ad; trend = row.d84_yoy; trendLabel = 'Vorjahr (YoY)'; } 
         else if (timeframe === '28d') { adOpp = row.d28_ad; trend = trendType === 'yoy' ? row.d28_yoy : row.d28_mom; trendLabel = trendType === 'yoy' ? 'Vorjahr (YoY)' : 'Vorperiode (MoM)'; } 
         else { adOpp = row.d7_ad; trend = trendType === 'yoy' ? row.d7_yoy : row.d7_wow; trendLabel = trendType === 'yoy' ? 'Vorjahr (YoY)' : 'Vorwoche (WoW)'; }
-        if (adOpp < minAd) minAd = adOpp;
-        if (adOpp > maxAd) maxAd = adOpp;
         return { ...row, currentAdOpp: adOpp, currentTrend: trend, trendLabel };
-      }).filter(row => row.currentAdOpp > 0 && row.currentAdOpp >= activeMinAdOpp)
-        .filter(row => trendFilter === 'all' ? true : (trendFilter === 'positive' ? row.currentTrend >= 0 : row.currentTrend < 0));
+      })
+      .filter(row => row.currentAdOpp > 0 && row.currentAdOpp >= activeMinAdOpp)
+      .filter(row => trendFilter === 'all' ? true : (trendFilter === 'positive' ? row.currentTrend >= 0 : row.currentTrend < 0));
+  }, [data, disabledRoutes, activeCountries, activeDestCountries, minAdOppFilter, timeframe, trendType, trendFilter, activeTab]);
 
+  const accChartData = useMemo(() => {
+    if (activeTab !== 'accommodations') return { filteredData: [], destHotspots: [] };
+    const activeMinAdOpp = Number(accMinAdOppFilter) || 0;
+    
+    const filteredData = accData.filter(r => 
+      (accFilterType === 'All' || r.type === accFilterType) &&
+      activeAccCountries.includes(r.userCountry) &&
+      activeAccRegions.includes(r.destRegion) &&
+      r.adOpp >= activeMinAdOpp
+    ).filter(row => trendFilter === 'all' ? true : (trendFilter === 'positive' ? row.trend >= 0 : row.trend < 0));
+
+    const regionAgg = {};
+    filteredData.forEach(row => {
+      let destCoord = REGION_COORDS[row.destRegion];
+      if (!destCoord) {
+        const baseCoord = COUNTRY_CENTER_COORDS[row.destCountry];
+        destCoord = getFallbackCoord(row.destRegion || "unknown", baseCoord);
+      }
+      if(!regionAgg[row.destRegion]) regionAgg[row.destRegion] = { country: row.destCountry, coord: destCoord, adOpp: 0, prevAdOpp: 0 };
+      regionAgg[row.destRegion].adOpp += row.adOpp;
+      regionAgg[row.destRegion].prevAdOpp += row.prevAdOpp;
+    });
+
+    const destHotspots = Object.keys(regionAgg).map(reg => {
+       const d = regionAgg[reg];
+       const regWow = d.prevAdOpp > 0 ? (d.adOpp - d.prevAdOpp) / d.prevAdOpp : 0;
+       return { name: reg, value: d.coord, country: d.country, adOpp: d.adOpp, trend: regWow, isDest: true };
+    });
+
+    return { filteredData, destHotspots };
+  }, [accData, accFilterType, activeAccCountries, activeAccRegions, accMinAdOppFilter, trendFilter, activeTab]);
+
+
+  // --- TOP 5 / FLOP 5 BERECHNUNG ---
+  let top5 = [], flop5 = [];
+  if (activeTab === 'flights') {
+     const sorted = [...flightChartData].sort((a, b) => b.currentTrend - a.currentTrend);
+     top5 = sorted.slice(0, 5);
+     flop5 = sorted.slice().reverse().slice(0, 5);
+  } else {
+     const sorted = [...accChartData.destHotspots].sort((a, b) => b.trend - a.trend);
+     top5 = sorted.slice(0, 5);
+     flop5 = sorted.slice().reverse().slice(0, 5);
+  }
+
+  // --- ECHARTS UPDATE ---
+  useEffect(() => {
+    if (!echartsReady || !chartRef.current) return;
+    if (!chartInstance.current) chartInstance.current = window.echarts.init(chartRef.current);
+    let option = {};
+
+    if (activeTab === 'flights' && flightChartData.length > 0) {
+      let minAd = Infinity, maxAd = -Infinity;
+      flightChartData.forEach(row => { if (row.currentAdOpp < minAd) minAd = row.currentAdOpp; if (row.currentAdOpp > maxAd) maxAd = row.currentAdOpp; });
       if (minAd === maxAd) minAd = 0;
 
-      const lineData = currentData.map(row => {
+      const lineData = flightChartData.map(row => {
         const width = (maxAd > minAd) ? (1.5 + 3.5 * ((row.currentAdOpp - minAd) / (maxAd - minAd))) : 3;
         return { coords: [row.oCoord, row.dCoord], lineStyle: { width: width, color: getTrendColor(row.currentTrend), curveness: 0.2 }, details: row };
       });
 
       const scatterData = [];
-      currentData.forEach(row => {
+      flightChartData.forEach(row => {
         if (!scatterData.find(s => s.name === row.originCity)) scatterData.push({ name: row.originCity, value: row.oCoord });
         if (!scatterData.find(s => s.name === row.destCity)) scatterData.push({ name: row.destCity, value: row.dCoord });
       });
@@ -758,28 +898,17 @@ export default function App() {
         ]
       };
 
-    } else if (activeTab === 'accommodations' && accData.length > 0) {
-      // 🛏️ ACCOMMODATIONS
-      const activeMinAdOpp = Number(accMinAdOppFilter) || 0;
-      
-      const filteredData = accData.filter(r => 
-        (accFilterType === 'All' || r.type === accFilterType) &&
-        activeAccCountries.includes(r.userCountry) &&
-        activeAccRegions.includes(r.destRegion) &&
-        r.adOpp >= activeMinAdOpp
-      ).filter(row => trendFilter === 'all' ? true : (trendFilter === 'positive' ? row.trend >= 0 : row.trend < 0));
-      
+    } else if (activeTab === 'accommodations' && accChartData.filteredData.length > 0) {
+      const { filteredData, destHotspots } = accChartData;
       let minAd = Infinity, maxAd = -Infinity;
       filteredData.forEach(row => { if (row.adOpp < minAd) minAd = row.adOpp; if (row.adOpp > maxAd) maxAd = row.adOpp; });
       if (minAd === maxAd) minAd = 0;
 
       const lineData = [];
       const originScatter = [];
-      const regionAgg = {};
 
       filteredData.forEach(row => {
         const originCoord = COUNTRY_CENTER_COORDS[row.userCountry] || getFallbackCoord(row.userCountry);
-        
         let destCoord = REGION_COORDS[row.destRegion];
         if (!destCoord) {
           const baseCoord = COUNTRY_CENTER_COORDS[row.destCountry];
@@ -789,16 +918,6 @@ export default function App() {
         const width = (maxAd > minAd) ? (1.5 + 3.5 * ((row.adOpp - minAd) / (maxAd - minAd))) : 3;
         lineData.push({ coords: [originCoord, destCoord], lineStyle: { width: width, color: getTrendColor(row.trend), curveness: 0.2 }, details: row });
         if (!originScatter.find(s => s.name === row.userCountry)) originScatter.push({ name: row.userCountry, value: originCoord });
-
-        if(!regionAgg[row.destRegion]) regionAgg[row.destRegion] = { country: row.destCountry, coord: destCoord, adOpp: 0, prevAdOpp: 0 };
-        regionAgg[row.destRegion].adOpp += row.adOpp;
-        regionAgg[row.destRegion].prevAdOpp += row.prevAdOpp;
-      });
-
-      const destHotspots = Object.keys(regionAgg).map(reg => {
-         const data = regionAgg[reg];
-         const regWow = data.prevAdOpp > 0 ? (data.adOpp - data.prevAdOpp) / data.prevAdOpp : 0;
-         return { name: reg, value: data.coord, country: data.country, adOpp: data.adOpp, trend: regWow, isDest: true };
       });
 
       option = {
@@ -826,7 +945,16 @@ export default function App() {
         series: [
           { type: 'lines', coordinateSystem: 'geo', zlevel: 2, effect: { show: true, period: 6, trailLength: 0, symbol: 'circle', symbolSize: 4 }, lineStyle: { opacity: 0.6 }, data: lineData },
           { type: 'scatter', coordinateSystem: 'geo', zlevel: 3, symbolSize: 5, silent: true, itemStyle: { color: '#94a3b8' }, label: { show: true, position: 'left', formatter: '{b}', textStyle: { color: '#64748b', fontSize: 9 } }, data: originScatter },
-          { type: 'effectScatter', coordinateSystem: 'geo', zlevel: 4, symbolSize: (val, params) => { if(maxAd === minAd) return 10; return 8 + 15 * ((params.data.adOpp - minAd) / (maxAd - minAd)); }, itemStyle: { color: (params) => getTrendColor(params.data.trend), shadowBlur: 10, shadowColor: '#000' }, label: { show: true, position: 'right', formatter: '{b}', textStyle: { color: '#f8fafc', fontSize: 12, fontWeight: 'bold', textShadowColor: '#000', textShadowBlur: 3 } }, data: destHotspots }
+          { 
+            type: 'effectScatter', coordinateSystem: 'geo', zlevel: 4, 
+            symbolSize: (val, params) => {
+               if(maxAd === minAd) return 10;
+               return 8 + 15 * ((params.data.adOpp - minAd) / (maxAd - minAd));
+            },
+            itemStyle: { color: (params) => getTrendColor(params.data.trend), shadowBlur: 10, shadowColor: '#000' }, 
+            label: { show: true, position: 'right', formatter: '{b}', textStyle: { color: '#f8fafc', fontSize: 12, fontWeight: 'bold', textShadowColor: '#000', textShadowBlur: 3 } }, 
+            data: destHotspots 
+          }
         ]
       };
     } else {
@@ -847,7 +975,7 @@ export default function App() {
     const handleResize = () => chartInstance.current?.resize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [data, timeframe, trendType, trendFilter, echartsReady, disabledRoutes, activeCountries, activeDestCountries, minAdOppFilter, activeTab, accData, accFilterType, activeAccCountries, activeAccRegions, accMinAdOppFilter]);
+  }, [flightChartData, accChartData, echartsReady, activeTab]);
 
   const toggleDisabledRoute = (routeId) => setDisabledRoutes(prev => prev.filter(id => id !== routeId));
   const toggleCountry = (country) => setActiveCountries(prev => prev.includes(country) ? prev.filter(c => c !== country) : [...prev, country]);
@@ -869,6 +997,49 @@ export default function App() {
         return Array.from(newSet);
       });
     }
+  };
+
+  const handleManualMinAdOppChange = (e) => {
+    const val = e.target.value;
+    if (val === '') setMinAdOppFilter(''); 
+    else {
+      const num = parseInt(val, 10);
+      if (!isNaN(num) && num >= 0) setMinAdOppFilter(num.toString());
+    }
+  };
+
+  const handleManualAccMinAdOppChange = (e) => {
+    const val = e.target.value;
+    if (val === '') setAccMinAdOppFilter(''); 
+    else {
+      const num = parseInt(val, 10);
+      if (!isNaN(num) && num >= 0) setAccMinAdOppFilter(num.toString());
+    }
+  };
+
+  const renderTopFlopList = (items) => {
+    if (items.length === 0) return <div className="text-xs text-slate-500 py-2">Keine Daten verfügbar</div>;
+    return items.map((item, i) => {
+      const name = activeTab === 'flights' ? `${item.originCity} ➔ ${item.destCity}` : item.name;
+      const subtext = activeTab === 'flights' ? '' : `(${item.country})`;
+      const trend = activeTab === 'flights' ? item.currentTrend : item.trend;
+      const adOpp = activeTab === 'flights' ? item.currentAdOpp : item.adOpp;
+      const isPositive = trend >= 0;
+      return (
+        <div key={i} className="flex justify-between items-center text-xs py-1 border-b border-slate-700/50 last:border-0">
+          <div className="flex items-center gap-1.5 truncate pr-2 flex-1">
+            <span className="text-slate-500 font-mono w-3 shrink-0">{i+1}.</span>
+            <span className="truncate" title={name}>{name} <span className="text-slate-500 text-[10px]">{subtext}</span></span>
+          </div>
+          <div className="flex flex-col items-end shrink-0">
+            <span className={`font-bold ${isPositive ? 'text-emerald-400' : 'text-red-400'}`}>
+              {isPositive ? '+' : ''}{(trend * 100).toFixed(1)}%
+            </span>
+            <span className="text-[9px] text-slate-500">{adOpp.toLocaleString('de-DE')}</span>
+          </div>
+        </div>
+      );
+    });
   };
 
   return (
@@ -934,7 +1105,7 @@ export default function App() {
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {availableCountries.map(country => (
-                      <button key={country} onClick={() => toggleCountry(country)} title={COUNTRY_NAMES[country] || country} className={`flex justify-center items-center p-1.5 rounded transition-colors border ${activeCountries.includes(country) ? 'bg-blue-600/20 border-blue-500 opacity-100 shadow-sm scale-100' : 'bg-slate-800 border-slate-700 hover:bg-slate-700 opacity-50 saturate-50 scale-95'}`}>
+                      <button key={country} onClick={() => toggleCountry(country)} title={COUNTRY_NAMES[country] || country} className={`flex justify-center items-center p-1.5 rounded transition-colors border ${activeCountries.includes(country) ? 'bg-blue-600/20 border-blue-500 opacity-100 shadow-sm scale-100' : 'bg-slate-800 border-slate-700 hover:bg-slate-700 opacity-30 saturate-50 scale-95'}`}>
                         <img src={`https://flagcdn.com/w40/${country.toLowerCase()}.png`} alt={country} className="w-6 rounded-sm shadow-sm" />
                       </button>
                     ))}
@@ -950,28 +1121,35 @@ export default function App() {
                   </div>
                   {isDestExpanded && (
                     <div className="p-3 pt-0 border-t border-slate-700/50 mt-1">
-                      {Object.keys(destByContinent).sort().map(continent => (
-                        <div key={continent} className="mb-4 last:mb-0">
-                          <div className="flex justify-between items-end mb-2">
-                            <span className="text-xs font-semibold text-slate-300">{continent}</span>
-                            <div className="flex gap-2">
-                              <button onClick={() => setContinentAll(destByContinent[continent])} className="text-[10px] text-emerald-400 hover:text-emerald-300 transition-colors">Alle</button>
-                              <span className="text-[10px] text-slate-500">|</span>
-                              <button onClick={() => setContinentNone(destByContinent[continent])} className="text-[10px] text-slate-400 hover:text-slate-300 transition-colors">Keines</button>
+                      <div className="flex gap-2 mb-4 pb-2 border-b border-slate-700/50 px-3">
+                        <button onClick={() => setActiveDestCountries([...availableDestCountries])} className="text-xs text-emerald-400 hover:text-emerald-300 font-medium">Alle anwählen</button>
+                        <span className="text-xs text-slate-600">|</span>
+                        <button onClick={() => setActiveDestCountries([])} className="text-xs text-slate-400 hover:text-slate-300">Alle abwählen</button>
+                      </div>
+                      <div className="px-3 pb-3">
+                        {Object.keys(destByContinent).sort().map(continent => (
+                          <div key={continent} className="mb-4 last:mb-0">
+                            <div className="flex justify-between items-end mb-2">
+                              <span className="text-xs font-semibold text-slate-300">{continent}</span>
+                              <div className="flex gap-2">
+                                <button onClick={() => setContinentAll(destByContinent[continent])} className="text-[10px] text-emerald-400 hover:text-emerald-300 transition-colors">Alle</button>
+                                <span className="text-[10px] text-slate-500">|</span>
+                                <button onClick={() => setContinentNone(destByContinent[continent])} className="text-[10px] text-slate-400 hover:text-slate-300 transition-colors">Keines</button>
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {destByContinent[continent].map(country => {
+                                const isValid = validDestCountries.includes(country); 
+                                return (
+                                  <button key={`dest-${country}`} onClick={() => isValid && toggleDestCountry(country)} title={!isValid ? `${COUNTRY_NAMES[country] || country} (Keine Routen)` : (COUNTRY_NAMES[country] || country)} className={`flex justify-center items-center p-1.5 rounded transition-colors border ${!isValid ? 'opacity-10 cursor-not-allowed bg-slate-900 border-slate-800 grayscale' : activeDestCountries.includes(country) ? 'bg-emerald-600/20 border-emerald-500 opacity-100 shadow-sm scale-100' : 'bg-slate-800 border-slate-700 hover:bg-slate-700 opacity-30 saturate-50 scale-95'}`}>
+                                    <img src={`https://flagcdn.com/w40/${country.toLowerCase()}.png`} alt={country} className="w-6 rounded-sm shadow-sm" />
+                                  </button>
+                                );
+                              })}
                             </div>
                           </div>
-                          <div className="flex flex-wrap gap-1.5">
-                            {destByContinent[continent].map(country => {
-                              const isValid = validDestCountries.includes(country); 
-                              return (
-                                <button key={`dest-${country}`} onClick={() => isValid && toggleDestCountry(country)} title={!isValid ? `${COUNTRY_NAMES[country] || country} (Keine Routen)` : (COUNTRY_NAMES[country] || country)} className={`flex justify-center items-center p-1.5 rounded transition-colors border ${!isValid ? 'opacity-10 cursor-not-allowed bg-slate-900 border-slate-800 grayscale' : activeDestCountries.includes(country) ? 'bg-emerald-600/20 border-emerald-500 opacity-100 shadow-sm scale-100' : 'bg-slate-800 border-slate-700 hover:bg-slate-700 opacity-50 saturate-50 scale-95'}`}>
-                                  <img src={`https://flagcdn.com/w40/${country.toLowerCase()}.png`} alt={country} className="w-6 rounded-sm shadow-sm" />
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -980,7 +1158,7 @@ export default function App() {
               <div className="mb-6 p-4 bg-slate-800/80 rounded-lg border border-slate-700 shadow-inner">
                 <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2"><SlidersHorizontal className="w-4 h-4" /> Min. Interesse</h2>
                 <div className="flex flex-col gap-3">
-                  <input type="number" min="0" value={minAdOppFilter} onChange={(e) => setMinAdOppFilter(e.target.value === '' ? '' : parseInt(e.target.value, 10).toString())} className="w-full bg-slate-900 border border-slate-600 text-slate-200 text-sm rounded px-3 py-1.5 focus:outline-none focus:border-blue-500 transition-colors" placeholder="Exakter Wert..." />
+                  <input type="number" min="0" value={minAdOppFilter} onChange={handleManualMinAdOppChange} className="w-full bg-slate-900 border border-slate-600 text-slate-200 text-sm rounded px-3 py-1.5 focus:outline-none focus:border-blue-500 transition-colors" placeholder="Exakter Wert..." />
                   <input type="range" min="0" max={maxPossibleAdOppFlights} step="5000" value={minAdOppFilter === '' ? 0 : minAdOppFilter} onChange={(e) => setMinAdOppFilter(e.target.value)} className="w-full h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-blue-500" />
                   <div className="flex justify-between items-center text-[10px] text-slate-500"><span>0</span><span>Max: {maxPossibleAdOppFlights.toLocaleString('de-DE')}</span></div>
                 </div>
@@ -1032,8 +1210,8 @@ export default function App() {
             <>
               {isDefaultDataAcc && (
                 <div className="mb-6 bg-slate-800/80 p-1.5 rounded-lg border border-slate-700 flex gap-1.5">
-                   <button onClick={() => setAccTimeframe('set1')} className={`flex-1 py-1.5 text-xs font-bold rounded transition-colors ${accTimeframe === 'set1' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-700/50'}`}>Zeitraum 1</button>
-                   <button onClick={() => setAccTimeframe('set2')} className={`flex-1 py-1.5 text-xs font-bold rounded transition-colors ${accTimeframe === 'set2' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-700/50'}`}>Zeitraum 2</button>
+                   <button onClick={() => setAccTimeframe('set1')} className={`flex-1 py-1.5 text-xs font-bold rounded transition-colors ${accTimeframe === 'set1' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-700/50'}`}>WoW (week over week)</button>
+                   <button onClick={() => setAccTimeframe('set2')} className={`flex-1 py-1.5 text-xs font-bold rounded transition-colors ${accTimeframe === 'set2' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-700/50'}`}>MoM (month over month)</button>
                 </div>
               )}
 
@@ -1049,7 +1227,7 @@ export default function App() {
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {availableAccCountries.map(country => (
-                      <button key={country} onClick={() => toggleAccCountry(country)} title={COUNTRY_NAMES[country] || country} className={`flex justify-center items-center p-1.5 rounded transition-colors border ${activeAccCountries.includes(country) ? 'bg-indigo-600/20 border-indigo-500 opacity-100 shadow-sm scale-100' : 'bg-slate-800 border-slate-700 hover:bg-slate-700 opacity-50 saturate-50 scale-95'}`}>
+                      <button key={country} onClick={() => toggleAccCountry(country)} title={COUNTRY_NAMES[country] || country} className={`flex justify-center items-center p-1.5 rounded transition-colors border ${activeAccCountries.includes(country) ? 'bg-indigo-600/20 border-indigo-500 opacity-100 shadow-sm scale-100' : 'bg-slate-800 border-slate-700 hover:bg-slate-700 opacity-30 saturate-50 scale-95'}`}>
                         <img src={`https://flagcdn.com/w40/${country.toLowerCase()}.png`} alt={country} className="w-6 rounded-sm shadow-sm" />
                       </button>
                     ))}
@@ -1095,37 +1273,45 @@ export default function App() {
                         {Object.keys(groupedRegions).length === 0 ? (
                           <div className="text-xs text-slate-500 text-center py-4">Keine Region gefunden</div>
                         ) : (
-                          Object.keys(groupedRegions).sort().map(countryCode => {
+                          Object.keys(groupedRegions).sort((a, b) => {
+                            const nameA = COUNTRY_NAMES[a] || a;
+                            const nameB = COUNTRY_NAMES[b] || b;
+                            return nameA.localeCompare(nameB);
+                          }).map(countryCode => {
                             const regionsInCountry = groupedRegions[countryCode];
                             const allSelected = regionsInCountry.every(r => activeAccRegions.includes(r));
                             const someSelected = regionsInCountry.some(r => activeAccRegions.includes(r));
+                            const isExpanded = regionSearch.length > 0 || expandedAccCountries[countryCode];
                             
                             return (
-                              <div key={countryCode} className="mb-3 last:mb-0">
-                                <div 
-                                  className="flex items-center justify-between text-xs font-bold text-slate-400 bg-slate-900/50 p-1.5 rounded cursor-pointer hover:bg-slate-700/50 transition-colors mb-1"
-                                  onClick={() => toggleCountryRegions(countryCode, regionsInCountry)}
-                                >
-                                  <div className="flex items-center gap-2">
+                              <div key={countryCode} className="mb-2 last:mb-0">
+                                <div className="flex items-center justify-between text-xs font-bold text-slate-400 bg-slate-900/50 p-1.5 rounded cursor-pointer hover:bg-slate-700/50 transition-colors mb-1">
+                                  <div className="flex items-center gap-2 flex-1" onClick={(e) => toggleAccCountryAccordion(countryCode, e)}>
+                                    {isExpanded ? <ChevronUp className="w-3 h-3 text-slate-500" /> : <ChevronDown className="w-3 h-3 text-slate-500" />}
                                     {getFlagImgHtml(countryCode) ? (
                                       <span dangerouslySetInnerHTML={{ __html: getFlagImgHtml(countryCode) }} />
                                     ) : null}
                                     <span>{COUNTRY_NAMES[countryCode] || countryCode}</span>
                                   </div>
-                                  <div className={`w-3.5 h-3.5 rounded-sm border flex items-center justify-center transition-colors ${allSelected ? 'bg-indigo-500 border-indigo-500' : someSelected ? 'bg-indigo-500/30 border-indigo-500/50' : 'border-slate-500 bg-slate-800'}`}>
+                                  <div 
+                                    className={`w-3.5 h-3.5 rounded-sm border flex items-center justify-center transition-colors ${allSelected ? 'bg-indigo-500 border-indigo-500' : someSelected ? 'bg-indigo-500/30 border-indigo-500/50' : 'border-slate-500 bg-slate-800'}`}
+                                    onClick={() => toggleCountryRegions(countryCode, regionsInCountry)}
+                                  >
                                     {allSelected && <CheckCircle className="w-2.5 h-2.5 text-white" />}
                                   </div>
                                 </div>
-                                <div className="pl-6 pr-2 flex flex-col gap-0.5">
-                                  {regionsInCountry.sort().map(region => (
-                                    <label key={region} className="flex items-center gap-2 p-1.5 hover:bg-slate-700/50 rounded cursor-pointer group">
-                                      <div className={`w-3 h-3 rounded border flex items-center justify-center shrink-0 transition-colors ${activeAccRegions.includes(region) ? 'bg-indigo-600 border-indigo-600' : 'bg-slate-900 border-slate-600 group-hover:border-indigo-500'}`}>
-                                        {activeAccRegions.includes(region) && <CheckCircle className="w-2 h-2 text-white" />}
-                                      </div>
-                                      <span className={`text-xs truncate select-none ${activeAccRegions.includes(region) ? 'text-slate-200' : 'text-slate-400'}`}>{region}</span>
-                                    </label>
-                                  ))}
-                                </div>
+                                {isExpanded && (
+                                  <div className="pl-7 pr-2 flex flex-col gap-0.5 mb-2">
+                                    {regionsInCountry.sort().map(region => (
+                                      <label key={region} className="flex items-center gap-2 p-1.5 hover:bg-slate-700/50 rounded cursor-pointer group">
+                                        <div className={`w-3 h-3 rounded border flex items-center justify-center shrink-0 transition-colors ${activeAccRegions.includes(region) ? 'bg-indigo-600 border-indigo-600' : 'bg-slate-900 border-slate-600 group-hover:border-indigo-500'}`}>
+                                          {activeAccRegions.includes(region) && <CheckCircle className="w-2 h-2 text-white" />}
+                                        </div>
+                                        <span className={`text-xs truncate select-none ${activeAccRegions.includes(region) ? 'text-slate-200' : 'text-slate-400'}`}>{region}</span>
+                                      </label>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
                             );
                           })
@@ -1139,7 +1325,7 @@ export default function App() {
               <div className="mb-6 p-4 bg-slate-800/80 rounded-lg border border-slate-700 shadow-inner">
                 <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2"><SlidersHorizontal className="w-4 h-4" /> Min. Interesse</h2>
                 <div className="flex flex-col gap-3">
-                  <input type="number" min="0" value={accMinAdOppFilter} onChange={(e) => setAccMinAdOppFilter(e.target.value === '' ? '' : parseInt(e.target.value, 10).toString())} className="w-full bg-slate-900 border border-slate-600 text-slate-200 text-sm rounded px-3 py-1.5 focus:outline-none focus:border-indigo-500 transition-colors" placeholder="Exakter Wert..." />
+                  <input type="number" min="0" value={accMinAdOppFilter} onChange={handleManualAccMinAdOppChange} className="w-full bg-slate-900 border border-slate-600 text-slate-200 text-sm rounded px-3 py-1.5 focus:outline-none focus:border-indigo-500 transition-colors" placeholder="Exakter Wert..." />
                   <input type="range" min="0" max={maxPossibleAdOppAcc} step="5000" value={accMinAdOppFilter === '' ? 0 : accMinAdOppFilter} onChange={(e) => setAccMinAdOppFilter(e.target.value)} className="w-full h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-indigo-500" />
                   <div className="flex justify-between items-center text-[10px] text-slate-500"><span>0</span><span>Max: {maxPossibleAdOppAcc.toLocaleString('de-DE')}</span></div>
                 </div>
@@ -1169,7 +1355,7 @@ export default function App() {
               
               <div className="text-center p-3 bg-emerald-900/20 border border-emerald-800/50 rounded-lg mb-6">
                 <p className="text-sm text-emerald-400 font-semibold">
-                  {accData.filter(r => (accFilterType === 'All' || r.type === accFilterType) && activeAccCountries.includes(r.userCountry) && activeAccRegions.includes(r.destRegion) && r.adOpp >= (Number(accMinAdOppFilter) || 0)).filter(row => trendFilter === 'all' ? true : (trendFilter === 'positive' ? row.trend >= 0 : row.trend < 0)).length} Routen berechnet
+                  {accChartData.filteredData.length} Routen berechnet
                 </p>
                 <p className="text-xs text-slate-400 mt-1">Gehe mit der Maus über die pulsierenden Regionen, um Details zu sehen.</p>
               </div>
@@ -1211,7 +1397,7 @@ export default function App() {
               title="Pro Workspace (DIY Analytics)"
             />
           </div>
-          <span className="text-[10px] text-slate-600">v2.1</span>
+          <span className="text-[10px] text-slate-600">v2.6</span>
         </div>
       </div>
 
@@ -1226,6 +1412,32 @@ export default function App() {
           </div>
         )}
         <div ref={chartRef} className="w-full h-full" style={{ visibility: echartsReady ? 'visible' : 'hidden' }} />
+        
+        {/* --- TOP 5 / FLOP 5 PANEL --- */}
+        {(top5.length > 0 || flop5.length > 0) && (
+          <div className="absolute top-4 right-4 z-30 w-72 flex flex-col gap-4 pointer-events-none">
+            {top5.length > 0 && (
+              <div className="bg-slate-900/90 backdrop-blur border border-slate-700 rounded-xl shadow-2xl p-4 pointer-events-auto">
+                <h3 className="text-emerald-400 font-bold text-xs uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <Trophy className="w-4 h-4" /> Top 5 (Gewinner)
+                </h3>
+                <div className="flex flex-col">
+                  {renderTopFlopList(top5)}
+                </div>
+              </div>
+            )}
+            {flop5.length > 0 && (
+              <div className="bg-slate-900/90 backdrop-blur border border-slate-700 rounded-xl shadow-2xl p-4 pointer-events-auto">
+                <h3 className="text-red-400 font-bold text-xs uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <TrendingDown className="w-4 h-4" /> Flop 5 (Verlierer)
+                </h3>
+                <div className="flex flex-col">
+                  {renderTopFlopList(flop5)}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
 
@@ -1285,12 +1497,11 @@ export default function App() {
                   {/* UNTERKÜNFTE ADMIN */}
                   <div className="bg-slate-800 p-5 rounded-lg border border-slate-700">
                     <h3 className="text-lg font-bold text-indigo-400 flex items-center gap-2 mb-4"><Bed className="w-5 h-5"/> Unterkünfte (Datenbank)</h3>
-                    
                     <div className="space-y-6">
                       
-                      {/* SET 1: Z.B. 7 TAGE */}
+                      {/* SET 1: WoW */}
                       <div className="p-4 border border-slate-600 rounded bg-slate-900/40">
-                        <h4 className="text-sm font-bold text-indigo-400 mb-3 border-b border-slate-700 pb-2">Zeitraum 1 (z.B. WoW / 7 Tage)</h4>
+                        <h4 className="text-sm font-bold text-indigo-400 mb-3 border-b border-slate-700 pb-2">Zeitraum 1 (WoW / 7 Tage)</h4>
                         <div className="grid grid-cols-2 gap-4">
                           <div>
                             <label className="block text-[10px] font-semibold text-slate-400 mb-1">Aktuell (Current)</label>
@@ -1337,9 +1548,9 @@ export default function App() {
                         </div>
                       </div>
 
-                      {/* SET 2: Z.B. 30 TAGE */}
+                      {/* SET 2: MoM */}
                       <div className="p-4 border border-slate-600 rounded bg-slate-900/40">
-                        <h4 className="text-sm font-bold text-indigo-400 mb-3 border-b border-slate-700 pb-2">Zeitraum 2 (z.B. MoM / 30 Tage)</h4>
+                        <h4 className="text-sm font-bold text-indigo-400 mb-3 border-b border-slate-700 pb-2">Zeitraum 2 (MoM / 30 Tage)</h4>
                         <div className="grid grid-cols-2 gap-4">
                           <div>
                             <label className="block text-[10px] font-semibold text-slate-400 mb-1">Aktuell (Current)</label>
@@ -1486,7 +1697,11 @@ export default function App() {
                       </label>
                     </div>
                   </div>
-                  <button onClick={applyCustomAcc} disabled={!tempAccCurrent || !tempAccPrevious} className="w-full py-3 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white font-bold rounded-lg transition-colors">Berechnung starten</button>
+                  <div className="flex items-start gap-2 bg-indigo-900/20 text-indigo-300 p-3 rounded text-xs border border-indigo-500/20 mb-4">
+                    <Info className="w-4 h-4 shrink-0 mt-0.5" />
+                    <p>Aus beiden Dateien wird automatisch der Trend (für Ad Opp. &gt; 1.000) berechnet.</p>
+                  </div>
+                  <button onClick={applyCustomAcc} disabled={!tempAccCurrent || !tempAccPrevious} className="w-full py-3 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white font-bold rounded-lg transition-colors mt-4">Berechnung starten</button>
                 </div>
               )}
             </div>
