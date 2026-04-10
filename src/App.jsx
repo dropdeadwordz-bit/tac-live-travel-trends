@@ -117,45 +117,6 @@ const getFallbackCoord = (str, baseCoord) => {
 };
 
 // ==========================================
-// 🧹 BEREINIGUNG VON CSV-DATEN VOR UPLOAD
-// ==========================================
-const filterFlightCsvText = (text) => {
-  if(!text) return "";
-  const lines = text.split('\n');
-  if(lines.length < 3) return text;
-  const delimiter = lines[1].includes(';') ? ';' : ',';
-  const filtered = [lines[0].replace(/\r/g, ''), lines[1].replace(/\r/g, '')];
-  for(let i=2; i<lines.length; i++) {
-    const line = lines[i].replace(/\r/g, '').trim();
-    if(!line) continue;
-    const cols = line.split(delimiter);
-    const v1 = parseFloat(cols[3]) || 0;
-    const v2 = parseFloat(cols[5]) || 0;
-    const v3 = parseFloat(cols[8]) || 0;
-    if(v1 > 0 || v2 > 0 || v3 > 0) filtered.push(line);
-  }
-  return filtered.join('\n');
-};
-
-const filterAccCsvText = (text) => {
-  if(!text) return "";
-  const lines = text.split('\n');
-  if(lines.length < 2) return text;
-  const delimiter = lines[0].includes(';') ? ';' : ',';
-  const filtered = [lines[0].replace(/\r/g, '')];
-  for(let i=1; i<lines.length; i++) {
-    const line = lines[i].replace(/\r/g, '').trim();
-    if(!line) continue;
-    const cols = line.split(delimiter);
-    if(cols.length >= 5) {
-      const adOpp = parseFloat(cols[4]) || 0;
-      if(adOpp > 0) filtered.push(line);
-    }
-  }
-  return filtered.join('\n');
-};
-
-// ==========================================
 // 🛠️ FALLBACK-DATEN (Wenn DB leer/offline)
 // ==========================================
 const DEFAULT_FLIGHTS_CSV = `Route,,,Last 84 Days,,Last 28 Days,,,Last 7 Days,,
@@ -392,15 +353,66 @@ Object.keys(REGION_COORDS).forEach(k => { N_REGION_COORDS[normalizeString(k)] = 
 
 const PLANE_PATH = 'path://M1705.06,1318.313v-89.254l-319.9-221.799l0.073-208.063c0.521-84.662-26.629-121.796-63.961-121.491c-37.332-0.305-64.482,36.829-63.961,121.491l0.073,208.063l-319.9,221.799v89.254l330.343-157.288l12.238,241.308l-134.449,92.931l0.531,42.034l175.125-42.917l175.125,42.917l0.531-42.034l-134.449-92.931l12.238-241.308L1705.06,1318.313z';
 
+// ==========================================
+// 🧹 PRE-UPLOAD FILTER LOGIK (Vermeidet > 1MB Limit)
+// ==========================================
+const filterFlightCsvText = (text) => {
+  if(!text) return "";
+  const lines = text.split('\n');
+  if(lines.length < 3) return text;
+  const delimiter = lines[1].includes(';') ? ';' : ',';
+  const filtered = [lines[0].replace(/\r/g, ''), lines[1].replace(/\r/g, '')];
+  for(let i=2; i<lines.length; i++) {
+    const line = lines[i].replace(/\r/g, '').trim();
+    if(!line) continue;
+    const cols = line.split(delimiter);
+    const originFull = cols[0] || "";
+    const originCountry = originFull.includes('-') ? originFull.split('-')[0].trim() : 'Unbekannt';
+    const v1 = parseFloat(cols[3]) || 0;
+    const v2 = parseFloat(cols[5]) || 0;
+    const v3 = parseFloat(cols[8]) || 0;
+    
+    // Behalte nur EU/US/CA Origins und Zeilen mit echten Daten
+    if((v1 > 0 || v2 > 0 || v3 > 0) && VALID_ORIGINS.has(originCountry)) {
+        filtered.push(line);
+    }
+  }
+  return filtered.join('\n');
+};
+
+const filterAccCsvText = (text) => {
+  if(!text) return "";
+  const lines = text.split('\n');
+  if(lines.length < 2) return text;
+  const delimiter = lines[0].includes(';') ? ';' : ',';
+  const filtered = [lines[0].replace(/\r/g, '')];
+  for(let i=1; i<lines.length; i++) {
+    const line = lines[i].replace(/\r/g, '').trim();
+    if(!line) continue;
+    const cols = line.split(delimiter);
+    if(cols.length >= 5) {
+      const userCountry = cols[0].trim();
+      const adOpp = parseFloat(cols[4]) || 0;
+      // Pre-Filter für Datenbank: Mindestens 1000 AdOpp und nur relevante Ursprungsländer
+      if(adOpp >= 1000 && VALID_ORIGINS.has(userCountry)) {
+          filtered.push(line);
+      }
+    }
+  }
+  return filtered.join('\n');
+};
+
 export default function App() {
   const [activeTab, setActiveTab] = useState('flights'); 
 
+  // --- UI STATES ---
   const [echartsReady, setEchartsReady] = useState(false);
   const [user, setUser] = useState(null);
   const [isDiyModalOpen, setIsDiyModalOpen] = useState(false);
   const chartRef = useRef(null);
   const chartInstance = useRef(null);
 
+  // --- STATE FLÜGE ---
   const [isDefaultDataFlights, setIsDefaultDataFlights] = useState(true);
   const [isFlightFiltersInitialized, setIsFlightFiltersInitialized] = useState(false);
   const [customFlightDate, setCustomFlightDate] = useState("");
@@ -416,12 +428,14 @@ export default function App() {
   const [minAdOppFilter, setMinAdOppFilter] = useState(''); 
   const [isDestExpanded, setIsDestExpanded] = useState(false);
 
+  // --- STATE UNTERKÜNFTE ---
   const [isDefaultDataAcc, setIsDefaultDataAcc] = useState(true);
   const [isAccFiltersInitialized, setIsAccFiltersInitialized] = useState(false);
   const [customAccDate, setCustomAccDate] = useState("");
   const [accData, setAccData] = useState([]);
   const [accFilterType, setAccFilterType] = useState('All');
 
+  // --- ADMIN PANEL STATES ---
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [adminFlightDate, setAdminFlightDate] = useState("");
@@ -461,6 +475,7 @@ export default function App() {
   const [isRegionDropdownOpen, setIsRegionDropdownOpen] = useState(false);
   const [expandedAccCountries, setExpandedAccCountries] = useState({});
 
+  // --- TEMP MODAL STATES ---
   const [tempFlightFile, setTempFlightFile] = useState(null);
   const [tempFlightDate, setTempFlightDate] = useState("");
   
@@ -476,6 +491,9 @@ export default function App() {
   const clickCountRef = useRef(0);
   const clickTimeoutRef = useRef(null);
 
+  // ==========================================
+  // 1. INIT & AUTH
+  // ==========================================
   useEffect(() => {
     if (!document.getElementById('echarts-core')) {
       const script = document.createElement('script');
@@ -526,6 +544,9 @@ export default function App() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // ==========================================
+  // 2. FIREBASE DATEN LADEN
+  // ==========================================
   useEffect(() => {
     if (!user || !isFirebaseReady || !appId) return;
 
@@ -541,6 +562,7 @@ export default function App() {
       }
     }, (err) => console.error("Snapshot Error Flights:", err));
 
+    // Lade Set 1
     const accRef = getSafeDocRef(db, appId, 'appConfig', 'accommodations');
     const unsubAcc = onSnapshot(accRef, (docSnap) => {
       if (docSnap.exists()) {
@@ -548,20 +570,31 @@ export default function App() {
         setAccGlobalCurrCsv(d.currentCsv || DEFAULT_ACC_CURRENT_CSV);
         setAccGlobalPrevCsv(d.prevCsv || DEFAULT_ACC_PREVIOUS_CSV);
         setAccGlobalDate(d.lastUpdated || "Unbekannt");
-        
-        setAccGlobalCurrCsv2(d.currentCsv2 || "");
-        setAccGlobalPrevCsv2(d.prevCsv2 || "");
-        setAccGlobalDate2(d.lastUpdated2 || "");
       } else {
         setAccGlobalCurrCsv(DEFAULT_ACC_CURRENT_CSV);
         setAccGlobalPrevCsv(DEFAULT_ACC_PREVIOUS_CSV);
         setAccGlobalDate("Start-Daten");
       }
-    }, (err) => console.error("Snapshot Error Acc:", err));
+    }, (err) => console.error("Snapshot Error Acc 1:", err));
 
-    return () => { unsubFlights(); unsubAcc(); };
+    // Lade Set 2 aus getrenntem Dokument um 1MB Limit zu umgehen!
+    const accRef2 = getSafeDocRef(db, appId, 'appConfig', 'accommodations_set2');
+    const unsubAcc2 = onSnapshot(accRef2, (docSnap) => {
+      if (docSnap.exists()) {
+        const d = docSnap.data();
+        setAccGlobalCurrCsv2(d.currentCsv2 || "");
+        setAccGlobalPrevCsv2(d.prevCsv2 || "");
+        setAccGlobalDate2(d.lastUpdated2 || "");
+      }
+    }, (err) => console.error("Snapshot Error Acc 2:", err));
+
+    return () => { unsubFlights(); unsubAcc(); unsubAcc2(); };
   }, [user]);
 
+
+  // ==========================================
+  // 3. PARSING & UPDATE LOGIK
+  // ==========================================
   const parseCSV = (csvText) => {
     if(!csvText) return [];
     const lines = csvText.trim().split('\n');
@@ -650,6 +683,7 @@ export default function App() {
     return map;
   }, [accData]);
 
+  // Initialisiere Flüge Filter
   useEffect(() => {
     if (isDefaultDataFlights && flightsGlobalCsv) {
       const parsed = parseCSV(flightsGlobalCsv);
@@ -672,6 +706,7 @@ export default function App() {
     }
   }, [flightsGlobalCsv, isDefaultDataFlights, isFlightFiltersInitialized]);
 
+  // Lade Unterkünfte je nach Zeitraum Set 1 oder 2
   useEffect(() => {
     if (isDefaultDataAcc && accGlobalCurrCsv && accGlobalPrevCsv) {
       const cCsv = accTimeframe === 'set1' ? accGlobalCurrCsv : (accGlobalCurrCsv2 || accGlobalCurrCsv);
@@ -682,6 +717,7 @@ export default function App() {
     }
   }, [accGlobalCurrCsv, accGlobalPrevCsv, accGlobalCurrCsv2, accGlobalPrevCsv2, accTimeframe, isDefaultDataAcc]);
 
+  // Initialisiere Unterkünfte Filter
   useEffect(() => {
     if (accData.length === 0) return;
     const countries = [...new Set(accData.map(d => d.userCountry))].sort();
@@ -704,6 +740,10 @@ export default function App() {
   const initDefaultFlights = () => { setIsDefaultDataFlights(true); setIsFlightFiltersInitialized(false); setCustomFlightDate(""); };
   const initDefaultAcc = () => { setIsDefaultDataAcc(true); setIsAccFiltersInitialized(false); setCustomAccDate(""); setAccTimeframe('set1'); };
 
+
+  // ==========================================
+  // 4. ADMIN & DIY SPEICHERN
+  // ==========================================
   const handleAdminSaveFlights = async () => {
     if (!user || !isFirebaseReady || !appId) return alert("Firebase nicht verbunden!");
     if (!adminFlightCsv) return alert("Bitte eine Datei auswählen!");
@@ -725,20 +765,22 @@ export default function App() {
     if (!user || !isFirebaseReady || !appId) return alert("Firebase nicht verbunden!");
     setIsSaving(true);
     try {
-      const updateObj = {};
       if (adminAccCurrCsv && adminAccPrevCsv) {
-        updateObj.currentCsv = filterAccCsvText(await adminAccCurrCsv.text());
-        updateObj.prevCsv = filterAccCsvText(await adminAccPrevCsv.text());
-        updateObj.lastUpdated = `${formatRange(adminAccDate1Start, adminAccDate1End, "Aktuell")} vs ${formatRange(adminAccDate2Start, adminAccDate2End, "Vorher")}`;
-      }
-      if (adminAccCurrCsv2 && adminAccPrevCsv2) {
-        updateObj.currentCsv2 = filterAccCsvText(await adminAccCurrCsv2.text());
-        updateObj.prevCsv2 = filterAccCsvText(await adminAccPrevCsv2.text());
-        updateObj.lastUpdated2 = `${formatRange(adminAccDate3Start, adminAccDate3End, "Aktuell")} vs ${formatRange(adminAccDate4Start, adminAccDate4End, "Vorher")}`;
+        const updateObj1 = {
+          currentCsv: filterAccCsvText(await adminAccCurrCsv.text()),
+          prevCsv: filterAccCsvText(await adminAccPrevCsv.text()),
+          lastUpdated: `${formatRange(adminAccDate1Start, adminAccDate1End, "Aktuell")} vs ${formatRange(adminAccDate2Start, adminAccDate2End, "Vorher")}`
+        };
+        await setDoc(getSafeDocRef(db, appId, 'appConfig', 'accommodations'), updateObj1, { merge: true });
       }
       
-      if(Object.keys(updateObj).length > 0) {
-        await setDoc(getSafeDocRef(db, appId, 'appConfig', 'accommodations'), updateObj, { merge: true });
+      if (adminAccCurrCsv2 && adminAccPrevCsv2) {
+        const updateObj2 = {
+          currentCsv2: filterAccCsvText(await adminAccCurrCsv2.text()),
+          prevCsv2: filterAccCsvText(await adminAccPrevCsv2.text()),
+          lastUpdated2: `${formatRange(adminAccDate3Start, adminAccDate3End, "Aktuell")} vs ${formatRange(adminAccDate4Start, adminAccDate4End, "Vorher")}`
+        };
+        await setDoc(getSafeDocRef(db, appId, 'appConfig', 'accommodations_set2'), updateObj2, { merge: true });
       }
       
       setIsAdminPanelOpen(false);
@@ -791,6 +833,7 @@ export default function App() {
     }, 1000); 
   };
 
+  // --- BERECHNUNGEN FÜR UI ---
   const validDestCountries = useMemo(() => {
     const valid = new Set();
     data.forEach(row => { if (activeCountries.includes(row.originCountry)) valid.add(row.destCountry); });
@@ -854,6 +897,7 @@ export default function App() {
     setExpandedAccCountries(prev => ({...prev, [countryCode]: !prev[countryCode]}));
   };
 
+  // --- ZENTRALE DATEN FÜR ECHARTS & TOP 5 PANEL ---
   const flightChartData = useMemo(() => {
     if (activeTab !== 'flights') return [];
     const activeMinAdOpp = Number(minAdOppFilter) || 0;
@@ -902,6 +946,7 @@ export default function App() {
   }, [accData, accFilterType, activeAccCountries, activeAccRegions, accMinAdOppFilter, trendFilter, activeTab]);
 
 
+  // --- TOP 5 / FLOP 5 BERECHNUNG ---
   let top5 = [], flop5 = [];
   if (activeTab === 'flights') {
      const sorted = [...flightChartData].sort((a, b) => b.currentTrend - a.currentTrend);
@@ -913,6 +958,7 @@ export default function App() {
      flop5 = sorted.slice().reverse().slice(0, 5);
   }
 
+  // --- ECHARTS UPDATE ---
   useEffect(() => {
     if (!echartsReady || !chartRef.current) return;
     if (!chartInstance.current) chartInstance.current = window.echarts.init(chartRef.current);
@@ -1456,7 +1502,7 @@ export default function App() {
               title="Pro Workspace (DIY Analytics)"
             />
           </div>
-          <span className="text-[10px] text-slate-600">v3.2</span>
+          <span className="text-[10px] text-slate-600">v3.4</span>
         </div>
       </div>
 
@@ -1759,7 +1805,7 @@ export default function App() {
                   </div>
                   <div className="flex items-start gap-2 bg-indigo-900/20 text-indigo-300 p-3 rounded text-xs border border-indigo-500/20 mb-4">
                     <Info className="w-4 h-4 shrink-0 mt-0.5" />
-                    <p>Aus beiden Dateien wird automatisch der Trend (für Ad Opp. &gt; 1.000) berechnet.</p>
+                    <p>Aus beiden Dateien wird automatisch der Trend berechnet. (Routen unter 1000 Anfragen werden ignoriert).</p>
                   </div>
                   <button onClick={applyCustomAcc} disabled={!tempAccCurrent || !tempAccPrevious} className="w-full py-3 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white font-bold rounded-lg transition-colors mt-4">Berechnung starten</button>
                 </div>
