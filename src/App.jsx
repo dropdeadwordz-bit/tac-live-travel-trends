@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Upload, Map as MapIcon, Calendar, TrendingUp, TrendingDown, XCircle, EyeOff, Filter, SlidersHorizontal, ChevronDown, ChevronUp, Bed, CheckCircle, RefreshCw, Lock, Database, X, CloudUpload, Search, Trophy, Info } from 'lucide-react';
+import { Upload, Map as MapIcon, Calendar, TrendingUp, TrendingDown, XCircle, EyeOff, Filter, SlidersHorizontal, ChevronDown, ChevronUp, Bed, CheckCircle, RefreshCw, Lock, Database, X, CloudUpload, Search, Trophy, Info, FileText } from 'lucide-react';
 
 // === FIREBASE IMPORTS ===
 import { initializeApp } from 'firebase/app';
@@ -143,6 +143,12 @@ const getFlagImgHtml = (countryCode) => {
 // ==========================================
 // 🔧 GLOBALE WÖRTERBÜCHER & KOORDINATEN
 // ==========================================
+const VALID_ORIGINS = new Set([
+  "PT", "ES", "FR", "GB", "LU", "BE", "NL", "IT", "DE", "AT", 
+  "CH", "HU", "CZ", "PL", "SK", "SI", "HR", "US", "CA", "DK", 
+  "SE", "NO", "IL", "AE", "SA", "IE"
+]);
+
 const COUNTRY_NAMES = {
   "DE": "Deutschland", "AT": "Österreich", "CH": "Schweiz", "US": "USA", "GB": "Großbritannien",
   "FR": "Frankreich", "ES": "Spanien", "IT": "Italien", "NL": "Niederlande", "TR": "Türkei",
@@ -372,7 +378,7 @@ const filterFlightCsvText = (text) => {
     const v2 = parseFloat(cols[5]) || 0;
     const v3 = parseFloat(cols[8]) || 0;
     
-    // Behalte nur EU/US/CA Origins und Zeilen mit echten Daten
+    // Behalte nur konfigurierte Origins und Zeilen mit echten Daten
     if((v1 > 0 || v2 > 0 || v3 > 0) && VALID_ORIGINS.has(originCountry)) {
         filtered.push(line);
     }
@@ -612,8 +618,7 @@ export default function App() {
       const destCountry = destFull.includes('-') ? destFull.split('-')[0].trim() : 'Unbekannt';
       const destCity = destFull.includes('-') ? destFull.split('-')[1].trim() : destFull;
       
-      const isOriginValid = ['US', 'CA'].includes(originCountry) || COUNTRY_TO_CONTINENT[originCountry] === 'Europa';
-      if (!isOriginValid) continue;
+      if (!VALID_ORIGINS.has(originCountry)) continue;
 
       const baseO = COUNTRY_CENTER_COORDS[originCountry];
       const oCoord = N_CITY_COORDS[normalizeString(originCity)] || (baseO ? getFallbackCoord(originCity, baseO) : getFallbackCoord(originCity));
@@ -647,8 +652,7 @@ export default function App() {
            const destCountry = cols[1].trim();
            let destRegion = cols[2].trim();
            
-           const isOriginValid = ['US', 'CA'].includes(userCountry) || COUNTRY_TO_CONTINENT[userCountry] === 'Europa';
-           if (!isOriginValid) continue;
+           if (!VALID_ORIGINS.has(userCountry)) continue;
 
            const isDestEuUsCaTr = ['US', 'CA', 'TR'].includes(destCountry) || COUNTRY_TO_CONTINENT[destCountry] === 'Europa';
            if (!isDestEuUsCaTr) {
@@ -1502,7 +1506,7 @@ export default function App() {
               title="Pro Workspace (DIY Analytics)"
             />
           </div>
-          <span className="text-[10px] text-slate-600">v3.4</span>
+          <span className="text-[10px] text-slate-600">v3.5</span>
         </div>
       </div>
 
@@ -1568,6 +1572,28 @@ export default function App() {
                 </div>
               ) : (
                 <>
+                  <div className="bg-indigo-900/20 border border-indigo-500/30 p-4 rounded-lg mb-6 text-indigo-200 text-sm">
+                    <h3 className="font-bold text-indigo-400 mb-2 flex items-center gap-2"><FileText className="w-4 h-4"/> Export-Anleitung für Google/TAC</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <strong className="text-white">✈️ Flüge (Destination Trends &gt; Flights)</strong>
+                        <ul className="list-disc pl-4 mt-1 text-xs space-y-1 text-indigo-300">
+                          <li><strong>Zeitraum:</strong> Enddatum: Heute - 6 Tage. Anfang: Enddatum - 84 Tage.</li>
+                          <li><strong>Origins:</strong> PT, ES, FR, UK, LU, BE, NL, IT, DE, AT, CH, HU, CZ, PL, SK, SI, HR, US, CA, DK, SE, NO, IL, AE, SA, IE</li>
+                          <li><strong>Tabelle:</strong> Ad Opp. by City-City Route &gt; Export Data &gt; Chart Data</li>
+                        </ul>
+                      </div>
+                      <div>
+                        <strong className="text-white">🛏️ Unterkünfte (Destination Trends &gt; Acc.)</strong>
+                        <ul className="list-disc pl-4 mt-1 text-xs space-y-1 text-indigo-300">
+                          <li><strong>Zeiträume:</strong> Letzte 7 vs. vorletzte 7; Letzte 30 vs. vorletzte 30</li>
+                          <li><strong>Origins:</strong> Gleiche Länder wie bei Flügen</li>
+                          <li><strong>Tabelle:</strong> Ad Opp. by User Country and Destination Region &gt; Export Data &gt; Chart Data</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* FLÜGE ADMIN */}
                   <div className="bg-slate-800 p-5 rounded-lg border border-slate-700">
                     <h3 className="text-lg font-bold text-blue-400 flex items-center gap-2 mb-4"><span>✈️</span> Flüge (Datenbank)</h3>
