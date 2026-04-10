@@ -318,7 +318,7 @@ export default function App() {
 
   // --- UI STATES ---
   const [echartsReady, setEchartsReady] = useState(false);
-  const [isProModalOpen, setIsProModalOpen] = useState(false);
+  const [isDiyModalOpen, setIsDiyModalOpen] = useState(false);
   const chartRef = useRef(null);
   const chartInstance = useRef(null);
 
@@ -1397,7 +1397,7 @@ export default function App() {
               title="Pro Workspace (DIY Analytics)"
             />
           </div>
-          <span className="text-[10px] text-slate-600">v2.6</span>
+          <span className="text-[10px] text-slate-600">v2.7</span>
         </div>
       </div>
 
@@ -1609,9 +1609,8 @@ export default function App() {
         </div>
       )}
 
-
       {/* ========================================== */}
-      {/* 🚀 USER DIY MODAL (Pro Workspace)            */}
+      {/* 🚀 DIY MODAL */}
       {/* ========================================== */}
       {isDiyModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
